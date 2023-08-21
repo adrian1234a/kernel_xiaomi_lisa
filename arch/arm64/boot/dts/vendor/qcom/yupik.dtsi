@@ -35,7 +35,7 @@
 	#size-cells = <2>;
 
 	chosen {
-		bootargs = "log_buf_len=256K rcupdate.rcu_expedited=1 rcu_nocbs=0-7 kpti=off noirqdebug quiet";
+		bootargs = "log_buf_len=256K earlycon=msm_geni_serial,0x994000 rcupdate.rcu_expedited=1 rcu_nocbs=0-7 kpti=off";
 	};
 
 	memory { device_type = "memory"; reg = <0 0 0 0>; };
@@ -60,10 +60,6 @@
 		swr0 = &swr0;
 		swr1 = &swr1;
 		swr2 = &swr2;
-		i2c0 = &qupv3_se1_i2c;
-		i2c1 = &qupv3_se3_i2c;
-		i2c2 = &qupv3_se4_i2c;
-		i2c3 = &qupv3_se9_i2c;
 	};
 
 	firmware: firmware {};
@@ -365,6 +361,11 @@
 		reg = <0x0 0x86700000 0x0 0x4000000>;
 	};
 
+	pil_cdsp_mem: cdsp@9c700000 {
+		no-map;
+		reg = <0x0 0x9c700000 0x0 0x1e00000>;
+	};
+
 	adsp_mem: adsp_region {
 		compatible = "shared-dma-pool";
 		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
@@ -408,35 +409,32 @@
 		reg = <0x0 0x9ae00000 0x0 0x1900000>;
 	};
 
-        pil_cdsp_mem: cdsp@9c700000 {
-		no-map;
-		reg = <0x0 0x9c700000 0x0 0x1e00000>;
-	};
-
 	removed_mem: removed_region@c0000000 {
 		no-map;
 		reg = <0x0 0xc0000000 0x0 0x5100000>;
 	};
 
+/*
 	pil_trustedvm_mem: pil_trustedvm_region@d0800000 {
 		no-map;
-		reg = <0x00 0xd0800000 0x00 0x76f7000>;
+		reg = <0x0 0xd0800000 0x0 0x76f7000>;
 	};
 
 	qrtr_shbuf: qrtr-shmem {
 		no-map;
-		reg = <0x00 0xd7ef7000 0x00 0x9000>;
+		reg = <0x0 0xd7ef7000 0x0 0x9000>;
 	};
 
 	chan0_shbuf: neuron_block@0 {
 		no-map;
-		reg = <0x00 0xd7f00000 0x00 0x80000>;
+		reg = <0x0 0xd7f00000 0x0 0x80000>;
 	};
 
 	chan1_shbuf: neuron_block@1 {
 		no-map;
-		reg = <0x00 0xd7f80000 0x00 0x80000>;
+		reg = <0x0 0xd7f80000 0x0 0x80000>;
 	};
+*/
 
 	user_contig_mem: user_contig_region {
 		compatible = "shared-dma-pool";
@@ -452,19 +450,6 @@
 		reusable;
 		alignment = <0x0 0x400000>;
 		size = <0x0 0x1400000>;
-	};
-
-	non_secure_display_memory: non_secure_display_region {
-		compatible = "shared-dma-pool";
-		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
-		reusable;
-		alignment = <0x0 0x400000>;
-		size = <0x0 0x6400000>;
-	};
-
-	splash_memory:splash_region {
-		reg = <0x0 0xe1000000 0x0 0x02400000>;
-		label = "cont_splash_region";
 	};
 
 	qseecom_ta_mem: qseecom_ta_region {
@@ -483,6 +468,13 @@
 		size = <0 0x8c00000>;
 	};
 
+	qcom: ramoops {
+		compatible = "ramoops";
+		reg = <0x0 0xa9000000 0x0 0x200000>;
+		pmsg-size = <0x200000>;
+		mem-type = <2>;
+	};
+
 	/* global autoconfigured region for contiguous allocations */
 	linux,cma {
 		compatible = "shared-dma-pool";
@@ -491,6 +483,13 @@
 		alignment = <0x0 0x400000>;
 		size = <0x0 0x2000000>;
 		linux,cma-default;
+	};
+
+	dump_mem: mem_dump_region {
+		compatible = "shared-dma-pool";
+		alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
+		reusable;
+		size = <0 0x2c00000>;
 	};
 
 	audio_cma_mem: audio_cma_region {
@@ -787,11 +786,12 @@
 
 	hyp_core_ctl: qcom,hyp-core-ctl {
 		compatible = "qcom,hyp-core-ctl";
-		status = "ok";
+		status = "disabled";
 	};
 
 	dcc: dcc_v2@117f000 {
 		compatible = "qcom,dcc-v2";
+		status = "disabled";
 		reg = <0x117f000 0x1000>,
 		      <0x1112000 0x6000>;
 
@@ -2401,7 +2401,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU0>;
-		status = "disabled";
 	};
 
 	jtag_mm1: jtagmm@7140000 {
@@ -2413,7 +2412,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU1>;
-		status = "disabled";
 	};
 
 	jtag_mm2: jtagmm@7240000 {
@@ -2425,7 +2423,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU2>;
-		status = "disabled";
 	};
 
 	jtag_mm3: jtagmm@7340000 {
@@ -2437,7 +2434,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU3>;
-		status = "disabled";
 	};
 
 	jtag_mm4: jtagmm@7440000 {
@@ -2449,7 +2445,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU4>;
-		status = "disabled";
 	};
 
 	jtag_mm5: jtagmm@7540000 {
@@ -2461,7 +2456,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU5>;
-		status = "disabled";
 	};
 
 	jtag_mm6: jtagmm@7640000 {
@@ -2473,7 +2467,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU6>;
-		status = "disabled";
 	};
 
 	jtag_mm7: jtagmm@7740000 {
@@ -2485,7 +2478,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU7>;
-		status = "disabled";
 	};
 
 	eud: qcom,msm-eud@88e0000 {
@@ -4084,8 +4076,6 @@
 				qcom,intents = <0x800  5
 						0x2000 3
 						0x4400 2>;
-				qcom,non-wake-svc = <0x51
-						0x190>;
 			};
 
 			qcom,adsp_glink_ssr {
@@ -4296,6 +4286,7 @@
 
 	qcom-mem-buf {
 		compatible = "qcom,mem-buf";
+		status = "disabled";
 		qcom,mem-buf-capabilities = "supplier";
 	};
 
@@ -4376,16 +4367,6 @@
 		reset-names = "core_reset";
 
 		status = "disabled";
-
-		qos0 {
-			mask = <0x0f>;
-			vote = <61>;
-		};
-
-		qos1 {
-			mask = <0xf0>;
-			vote = <67>;
-		};
 	};
 
 	sdhc_2: sdhci@8804000 {
@@ -4436,33 +4417,25 @@
 		qcom,devfreq,freq-table = <50000000 202000000>;
 
 		status = "disabled";
-
-		qos0 {
-			mask = <0x0f>;
-			vote = <61>;
-		};
-
-		qos1 {
-			mask = <0xf0>;
-			vote = <67>;
-		};
 	};
 
 	qcom,trustedvm@d0800000 {
 		compatible = "qcom,pil-tz-generic";
-		status = "ok";
+		status = "disabled";
 		qcom,pas-id = <28>;
 		qcom,firmware-name = "trustedvm";
-		memory-region = <&pil_trustedvm_mem>;
+		//memory-region = <&pil_trustedvm_mem>;
 	};
 
 	qcom,guestvm_loader {
 		compatible = "qcom,guestvm-loader";
+		status = "disabled";
 		image_to_be_loaded = "trustedvm";
 	};
 
 	qcom,svm_neuron_block {
 		compatible = "qcom,neuron-service";
+		status = "disabled";
 		#address-cells = <1>;
 		#size-cells = <0>;
 		protocol {
@@ -4480,7 +4453,7 @@
 			class = "message-queue";
 			direction = "receive";
 			max-size = <0 65536>;
-			shared-buffer = <&chan0_shbuf>;
+			//shared-buffer = <&chan0_shbuf>;
 			qcom,primary;
 			haven-label = <1>;
 			peer-name = <2>;
@@ -4492,7 +4465,7 @@
 			class = "message-queue";
 			direction = "send";
 			max-size = <0 65536>;
-			shared-buffer = <&chan1_shbuf>;
+			//shared-buffer = <&chan1_shbuf>;
 			qcom,primary;
 			haven-label = <2>;
 			peer-name = <2>;
@@ -4501,10 +4474,11 @@
 
 	qrtr-haven {
 		compatible = "qcom,qrtr-haven";
+		status = "disabled";
 		qcom,master;
 		haven-label = <3>;
 		peer-name = <2>;
-		shared-buffer = <&qrtr_shbuf>;
+		//shared-buffer = <&qrtr_shbuf>;
 	};
 
 	pil_modem: qcom,mss@4080000 {
@@ -4667,7 +4641,7 @@
 
 	mem_dump {
 		compatible = "qcom,mem-dump";
-		status = "disabled";
+		memory-region = <&dump_mem>;
 
 		c0_context {
 			qcom,dump-size = <0x800>;

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/debugfs.h>
@@ -734,6 +733,12 @@ static void __cam_isp_ctx_send_sof_timestamp(
 
 	if ((ctx_isp->use_frame_header_ts) || (request_id == 0))
 		goto end;
+
+	if (ctx_isp->offline_context) {
+		CAM_DBG(CAM_ISP,
+			"Don't sent sof timestamp for offline context");
+		return;
+	}
 
 	req_msg.session_hdl = ctx_isp->base->session_hdl;
 	req_msg.u.frame_msg.frame_id = ctx_isp->frame_id;
@@ -2106,12 +2111,7 @@ static int __cam_isp_ctx_reg_upd_in_sof(struct cam_isp_context *ctx_isp,
 		else
 			CAM_ERR(CAM_ISP,
 				"receive rup in unexpected state");
-	} else {
-		atomic_set(&ctx_isp->deferred_reg_upd, 1);
-		CAM_WARN(CAM_ISP,
-			"Got a reg_upd in sof/epoch sub state");
 	}
-
 	if (req != NULL) {
 		__cam_isp_ctx_update_state_monitor_array(ctx_isp,
 			CAM_ISP_STATE_CHANGE_TRIGGER_REG_UPDATE,
@@ -3340,7 +3340,6 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 	cfg.cdm_reset_before_apply = req_isp->cdm_reset_before_apply;
 
 	atomic_set(&ctx_isp->apply_in_progress, 1);
-	atomic_set(&ctx_isp->deferred_reg_upd, 0);
 
 	rc = ctx->hw_mgr_intf->hw_config(ctx->hw_mgr_intf->hw_mgr_priv, &cfg);
 	if (!rc) {
@@ -3359,18 +3358,6 @@ static int __cam_isp_ctx_apply_req_in_activated_state(
 			req->request_id);
 		__cam_isp_ctx_update_event_record(ctx_isp,
 			CAM_ISP_CTX_EVENT_APPLY, req);
-		/*
-		* Sometimes, we get reg_upd before getting the cdm callback,
-		* then the sub state is SOF, we need to record the reg upd event,
-		* and process it once configured the hw.
-		*/
-		if (atomic_read(&ctx_isp->deferred_reg_upd)) {
-			__cam_isp_ctx_reg_upd_in_applied_state(
-			ctx_isp, NULL);
-			CAM_DBG(CAM_ISP,
-				"processed deferred reg upd for req:%lld",
-				apply->request_id);
-		}
 	} else if (rc == -EALREADY) {
 		spin_lock_bh(&ctx->lock);
 		req_isp->bubble_detected = true;

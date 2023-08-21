@@ -749,7 +749,7 @@ extern void __init init_vidc_kmem_buf_pool(void);
 static int __init msm_vidc_init(void)
 {
 	int rc = 0;
-
+	
 	init_vidc_kmem_buf_pool();
 
 	vidc_driver = kzalloc(sizeof(*vidc_driver),

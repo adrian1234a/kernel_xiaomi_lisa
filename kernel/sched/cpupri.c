@@ -175,9 +175,8 @@ retry:
 		if (!__cpupri_find(cp, p, lowest_mask, idx))
 #else
 		if (!__cpupri_find(cp, p, lowest_mask, idx, drop_nopreempts))
-#endif
 			continue;
-
+#endif
 
 		if (!lowest_mask || !fitness_fn)
 			return 1;
@@ -358,6 +357,5 @@ bool cpupri_check_rt(void)
 {
 	int cpu = raw_smp_processor_id();
 
-	return (cpu_rq(cpu)->rd->cpupri.cpu_to_pri[cpu] > CPUPRI_NORMAL) &&
-	       (cpu_rq(cpu)->rt.rt_throttled == 0);
+	return cpu_rq(cpu)->rd->cpupri.cpu_to_pri[cpu] > CPUPRI_NORMAL;
 }

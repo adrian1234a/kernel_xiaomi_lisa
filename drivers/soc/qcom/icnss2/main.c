@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, 2021, The Linux Foundation.
- * Copyright (C) 2021 XiaoMi, Inc.
  * All rights reserved.
  */
 
@@ -117,7 +116,7 @@ static void icnss_set_plat_priv(struct icnss_priv *priv)
 	penv = priv;
 }
 
-static struct icnss_priv *icnss_get_plat_priv()
+static struct icnss_priv *icnss_get_plat_priv(void)
 {
 	return penv;
 }
@@ -589,7 +588,7 @@ static int icnss_setup_dms_mac(struct icnss_priv *priv)
 		}
 		if (!priv->dms.nv_mac_not_prov && !priv->dms.mac_valid) {
 			icnss_pr_err("Unable to get MAC from DMS after retries\n");
-			//ICNSS_ASSERT(0);
+			ICNSS_ASSERT(0);
 			return -EINVAL;
 		}
 	}

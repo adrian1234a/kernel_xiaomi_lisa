@@ -55,8 +55,6 @@
 #include "sde_connector.h"
 #include "sde_vm.h"
 
-#include "mi_sde_connector.h"
-
 #include <linux/qcom_scm.h>
 #include "soc/qcom/secure_buffer.h"
 #include <linux/qtee_shmbridge.h>
@@ -1508,9 +1506,8 @@ static void sde_kms_complete_commit(struct msm_kms *kms,
 			pr_err("Connector Post kickoff failed rc=%d\n",
 					 rc);
 		}
-#if 0
-		mi_sde_connector_fod_notify(connector);
-#endif
+
+		sde_connector_fod_post_kickoff(connector);
 	}
 
 	vm_ops = sde_vm_get_ops(sde_kms);
@@ -3534,7 +3531,7 @@ static bool sde_kms_check_for_splash(struct msm_kms *kms, struct drm_crtc *crtc)
 		return sde_kms->splash_data.num_splash_displays;
 
 	drm_for_each_encoder_mask(encoder, crtc->dev,
-		crtc->state->encoder_mask) {
+			crtc->state->encoder_mask) {
 		if (sde_encoder_in_cont_splash(encoder))
 			return true;
 	}
@@ -5012,4 +5009,27 @@ int sde_kms_handle_recovery(struct drm_encoder *encoder)
 {
 	SDE_EVT32(DRMID(encoder), MSM_ENC_ACTIVE_REGION);
 	return sde_encoder_wait_for_event(encoder, MSM_ENC_ACTIVE_REGION);
+}
+
+void sde_kms_trigger_early_wakeup(struct sde_kms *sde_kms,
+		struct drm_crtc *crtc)
+{
+	struct msm_drm_private *priv;
+	struct drm_encoder *drm_enc;
+
+	if (!sde_kms || !crtc) {
+		SDE_ERROR("invalid argument sde_kms %pK crtc %pK\n",
+			sde_kms, crtc);
+		return;
+	}
+
+	priv = sde_kms->dev->dev_private;
+
+	SDE_ATRACE_BEGIN("sde_kms_trigger_early_wakeup");
+	drm_for_each_encoder_mask(drm_enc, crtc->dev, crtc->state->encoder_mask)
+		sde_encoder_trigger_early_wakeup(drm_enc);
+
+	if (sde_kms->first_kickoff)
+		sde_power_scale_reg_bus(&priv->phandle, VOTE_INDEX_HIGH, false);
+	SDE_ATRACE_END("sde_kms_trigger_early_wakeup");
 }

@@ -34,8 +34,6 @@ static LIST_HEAD(perf_crit_irqs);
 static DEFINE_RAW_SPINLOCK(perf_irqs_lock);
 static int perf_cpu_index = -1;
 static int prime_cpu_index = -1;
-static int drm_cpu_index = -1;
-static int kgsl_cpu_index = -1;
 static bool perf_crit_suspended;
 
 #if defined(CONFIG_IRQ_FORCED_THREADING) && !defined(CONFIG_PREEMPT_RT)
@@ -243,8 +241,6 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	if (!chip || !chip->irq_set_affinity)
 		return -EINVAL;
 
-	/* IRQs only run on the first CPU in the affinity mask; reflect that */
-	mask = cpumask_of(cpumask_first(mask));
 	ret = chip->irq_set_affinity(data, mask, force);
 	switch (ret) {
 	case IRQ_SET_MASK_OK:
@@ -443,8 +439,6 @@ irq_set_affinity_notifier(unsigned int irq, struct irq_affinity_notify *notify)
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
 
 	if (old_notify) {
-		if (notify)
-			WARN(1, "overwriting previous IRQ affinity notifier\n");
 		if (cancel_work_sync(&old_notify->work)) {
 			/* Pending work had a ref, put that one too */
 			kref_put(&old_notify->kref, old_notify->release);
@@ -1372,10 +1366,6 @@ static void affine_one_perf_thread(struct irqaction *action)
 
 	if (action->flags & IRQF_PERF_AFFINE)
 		mask = cpu_perf_mask;
-	else if (action->flags & IRQF_DRM_AFFINE)
-		mask = cpu_drm_mask;
-	else if (action->flags & IRQF_KGSL_AFFINE)
-		mask = cpu_kgsl_mask;
 	else
 		mask = cpu_prime_mask;
 
@@ -1401,12 +1391,6 @@ static void affine_one_perf_irq(struct irq_desc *desc, unsigned int perf_flag)
 	if (perf_flag & IRQF_PERF_AFFINE) {
 		mask = cpu_perf_mask;
 		mask_index = &perf_cpu_index;
-	} else if (perf_flag & IRQF_DRM_AFFINE) {
-		mask = cpu_drm_mask;
-		mask_index = &drm_cpu_index;
-	} else if (perf_flag & IRQF_KGSL_AFFINE) {
-		mask = cpu_kgsl_mask;
-		mask_index = &kgsl_cpu_index;
 	} else {
 		mask = cpu_prime_mask;
 		mask_index = &prime_cpu_index;
@@ -1456,7 +1440,6 @@ void irq_set_perf_affinity(unsigned int irq, unsigned int perf_flag)
 	}
 	raw_spin_unlock_irqrestore(&desc->lock, flags);
 }
-EXPORT_SYMBOL(irq_set_perf_affinity);
 
 void unaffine_perf_irqs(void)
 {
@@ -1779,14 +1762,14 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			irqd_set(&desc->irq_data, IRQD_NO_BALANCING);
 		}
 
-		if (new->flags & (IRQF_PERF_AFFINE | IRQF_PRIME_AFFINE |
-				  IRQF_DRM_AFFINE | IRQF_KGSL_AFFINE)) {
+		if (new->flags & (IRQF_PERF_AFFINE | IRQF_PRIME_AFFINE)) {
 			affine_one_perf_thread(new);
 			irqd_set(&desc->irq_data, IRQD_PERF_CRITICAL);
 			*old_ptr = new;
 		}
 
-		if (irq_settings_can_autoenable(desc)) {
+                if (!(new->flags & IRQF_NO_AUTOEN) &&
+                    irq_settings_can_autoenable(desc)) {
 			irq_startup(desc, IRQ_RESEND, IRQ_START_COND);
 		} else {
 			/*
@@ -2232,10 +2215,15 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	 * which interrupt is which (messes up the interrupt freeing
 	 * logic etc).
 	 *
+	 * Also shared interrupts do not go well with disabling auto enable.
+	 * The sharing interrupt might request it while it's still disabled
+	 * and then wait for interrupts forever.
+	 *
 	 * Also IRQF_COND_SUSPEND only makes sense for shared interrupts and
 	 * it cannot be set along with IRQF_NO_SUSPEND.
 	 */
 	if (((irqflags & IRQF_SHARED) && !dev_id) ||
+	    ((irqflags & IRQF_SHARED) && (irqflags & IRQF_NO_AUTOEN)) ||
 	    (!(irqflags & IRQF_SHARED) && (irqflags & IRQF_COND_SUSPEND)) ||
 	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND)))
 		return -EINVAL;
@@ -2391,7 +2379,8 @@ int request_nmi(unsigned int irq, irq_handler_t handler,
 
 	desc = irq_to_desc(irq);
 
-	if (!desc || irq_settings_can_autoenable(desc) ||
+	if (!desc || (irq_settings_can_autoenable(desc) &&
+	    !(irqflags & IRQF_NO_AUTOEN)) ||
 	    !irq_settings_can_request(desc) ||
 	    WARN_ON(irq_settings_is_per_cpu_devid(desc)) ||
 	    !irq_supports_nmi(desc))

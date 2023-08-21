@@ -1133,12 +1133,8 @@ static int do_cpu_down(unsigned int cpu, enum cpuhp_state target)
 	/* One big, LITTLE, and prime CPU must remain online */
 	if (!cpumask_intersects(&newmask, cpu_lp_mask) ||
 	    !cpumask_intersects(&newmask, cpu_perf_mask) ||
-	    !cpumask_intersects(&newmask, cpu_prime_mask) ||
-	    !cpumask_intersects(&newmask, cpu_drm_mask) ||
-	    !cpumask_intersects(&newmask, cpu_kgsl_mask)) {
-		pr_err("%s: not allowed for cpu %d", __func__, cpu);
+	    !cpumask_intersects(&newmask, cpu_prime_mask))
 		return -EINVAL;
-	}
 
 	/*
 	 * When cpusets are enabled, the rebuilding of the scheduling
@@ -1453,10 +1449,10 @@ void enable_nonboot_cpus(void)
 		error = _cpu_up(cpu, 1, CPUHP_ONLINE);
 		trace_suspend_resume(TPS("CPU_ON"), cpu, false);
 		if (!error) {
-			pr_info("CPU%d is up\n", cpu);
+			pr_debug("CPU%d is up\n", cpu);
 			cpu_device = get_cpu_device(cpu);
 			if (!cpu_device)
-				pr_err("%s: failed to get cpu%d device\n",
+				pr_debug("%s: failed to get cpu%d device\n",
 				       __func__, cpu);
 			else
 				kobject_uevent(&cpu_device->kobj, KOBJ_ONLINE);
@@ -2521,14 +2517,6 @@ const struct cpumask *const cpu_prime_mask = to_cpumask(&prime_cpu_bits);
 const struct cpumask *const cpu_prime_mask = cpu_possible_mask;
 #endif
 EXPORT_SYMBOL(cpu_prime_mask);
-
-// CPU 1 for DRM IRQ, CPU 2 for KGSL IRQ
-static const unsigned long drm_cpu_bits = 2;
-static const unsigned long kgsl_cpu_bits = 4;
-const struct cpumask *const cpu_drm_mask = to_cpumask(&drm_cpu_bits);
-const struct cpumask *const cpu_kgsl_mask = to_cpumask(&kgsl_cpu_bits);
-EXPORT_SYMBOL(cpu_drm_mask);
-EXPORT_SYMBOL(cpu_kgsl_mask);
 
 void init_cpu_present(const struct cpumask *src)
 {

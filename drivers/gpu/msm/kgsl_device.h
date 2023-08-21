@@ -83,7 +83,6 @@ struct kgsl_device_private;
 struct kgsl_context;
 struct kgsl_power_stats;
 struct kgsl_event;
-struct kgsl_snapshot;
 
 struct kgsl_functable {
 	/* Mandatory functions - these functions must be implemented
@@ -115,8 +114,6 @@ struct kgsl_functable {
 	void (*power_stats)(struct kgsl_device *device,
 		struct kgsl_power_stats *stats);
 	unsigned int (*gpuid)(struct kgsl_device *device, unsigned int *chipid);
-	void (*snapshot)(struct kgsl_device *device,
-		struct kgsl_snapshot *snapshot, struct kgsl_context *context);
 	irqreturn_t (*irq_handler)(struct kgsl_device *device);
 	int (*drain)(struct kgsl_device *device);
 	struct kgsl_device_private * (*device_private_create)(void);
@@ -257,6 +254,7 @@ struct kgsl_device {
 	struct idr context_idr;
 	rwlock_t context_lock;
 
+#if 0
 	struct {
 		void *ptr;
 		u32 size;
@@ -275,7 +273,6 @@ struct kgsl_device {
 	bool force_panic;		/* Force panic after snapshot dump */
 	bool skip_ib_capture;		/* Skip IB capture after snapshot */
 	bool prioritize_unrecoverable;	/* Overwrite with new GMU snapshots */
-	bool set_isdb_breakpoint;	/* Set isdb registers before snapshot */
 	bool snapshot_atomic;		/* To capture snapshot in atomic context*/
 	/* Use CP Crash dumper to get GPU snapshot*/
 	bool snapshot_crashdumper;
@@ -283,7 +280,10 @@ struct kgsl_device {
 	bool snapshot_legacy;
 
 	struct kobject snapshot_kobj;
-
+#endif
+#ifdef CONFIG_DEBUG_FS
+	bool set_isdb_breakpoint;	/* Set isdb registers before snapshot */
+#endif
 	struct kobject ppd_kobj;
 
 	struct kgsl_pwrscale pwrscale;
@@ -477,6 +477,7 @@ struct kgsl_device_private {
 	struct kgsl_process_private *process_priv;
 };
 
+#if 0
 /**
  * struct kgsl_snapshot - details for a specific snapshot instance
  * @ib1base: Active IB1 base address at the time of fault
@@ -543,6 +544,7 @@ struct kgsl_snapshot_object {
 	struct kgsl_mem_entry *entry;
 	struct list_head node;
 };
+#endif
 
 struct kgsl_device *kgsl_get_device(int dev_idx);
 
@@ -642,20 +644,6 @@ void kgsl_device_platform_remove(struct kgsl_device *device);
 
 const char *kgsl_pwrstate_to_str(unsigned int state);
 
-/**
- * kgsl_device_snapshot_probe - add resources for the device GPU snapshot
- * @device: The device to initialize
- * @size: The size of the static region to allocate
- *
- * Allocate memory for a GPU snapshot for the specified device,
- * and create the sysfs files to manage it
- */
-void kgsl_device_snapshot_probe(struct kgsl_device *device, u32 size);
-
-void kgsl_device_snapshot(struct kgsl_device *device,
-			struct kgsl_context *context, bool gmu_fault);
-void kgsl_device_snapshot_close(struct kgsl_device *device);
-
 void kgsl_events_init(void);
 void kgsl_events_exit(void);
 
@@ -716,11 +704,8 @@ bool kgsl_event_pending(struct kgsl_device *device,
 		kgsl_event_func func, void *priv);
 int kgsl_add_event(struct kgsl_device *device, struct kgsl_event_group *group,
 		unsigned int timestamp, kgsl_event_func func, void *priv);
-int kgsl_add_low_prio_event(struct kgsl_device *device,
-		struct kgsl_event_group *group, unsigned int timestamp,
-		kgsl_event_func func, void *priv);
 void kgsl_process_event_group(struct kgsl_device *device,
-		struct kgsl_event_group *group);
+	struct kgsl_event_group *group);
 void kgsl_flush_event_group(struct kgsl_device *device,
 		struct kgsl_event_group *group);
 void kgsl_process_event_groups(struct kgsl_device *device);
@@ -915,6 +900,7 @@ static inline int kgsl_sysfs_store(const char *buf, unsigned int *ptr)
 	return 0;
 }
 
+#if 0
 /*
  * A helper macro to print out "not enough memory functions" - this
  * makes it easy to standardize the messages as well as cut down on
@@ -958,6 +944,7 @@ void kgsl_snapshot_add_section(struct kgsl_device *device, u16 id,
 	struct kgsl_snapshot *snapshot,
 	size_t (*func)(struct kgsl_device *, u8 *, size_t, void *),
 	void *priv);
+#endif
 
 /**
  * kgsl_of_property_read_ddrtype - Get property from devicetree based on

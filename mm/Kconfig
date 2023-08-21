@@ -208,11 +208,17 @@ config MEMORY_HOTREMOVE
 # PA-RISC 7xxx's spinlock_t would enlarge struct page from 32 to 44 bytes.
 # DEBUG_SPINLOCK and DEBUG_LOCK_ALLOC spinlock_t also enlarge struct page.
 #
+# Moto huangzq2: disable SPLIT_RSS_COUNTING if we have ulmk.
+# ulmk fully relies on rss in proc/pid/statm, but rss in statm sometimes
+# is zero if we enabled SPLIT_RSS_COUNTING, checked with Google,
+# they agree to disalbe this. Also, our performance test didn't show any
+# performance downgrade.
 config SPLIT_PTLOCK_CPUS
 	int
 	default "999999" if !MMU
 	default "999999" if ARM && !CPU_CACHE_VIPT
 	default "999999" if PARISC && !PA20
+	default "999999" if HAVE_USERSPACE_LOW_MEMORY_KILLER
 	default "4"
 
 config ARCH_ENABLE_SPLIT_PMD_PTLOCK
@@ -654,6 +660,7 @@ config MAX_STACK_SIZE_MB
 config BALANCE_ANON_FILE_RECLAIM
 	bool "During reclaim treat anon and file backed pages equally"
 	depends on SWAP
+	default y
 	help
 	  When performing memory reclaim treat anonymous and file backed pages
 	  equally.
@@ -745,6 +752,16 @@ config PERCPU_STATS
 	  information includes global and per chunk statistics, which can
 	  be used to help understand percpu memory usage.
 
+config INCREASE_MAXIMUM_SWAPPINESS
+	bool "Allow swappiness to be set up to 200"
+	depends on SWAP
+	default y
+
+config DIRECT_RECLAIM_FILE_PAGES_ONLY
+	bool "Reclaim file pages only on direct reclaim path"
+	depends on SWAP
+	default y
+
 config MM_STAT_UNRECLAIMABLE_PAGES
 	default y
 	depends on QGKI
@@ -824,6 +841,32 @@ config ARCH_HAS_PTE_SPECIAL
 config ARCH_HAS_HUGEPD
 	bool
 
+# multi-gen LRU {
+config LRU_GEN
+	bool "Multi-Gen LRU"
+	depends on MMU
+	# make sure page->flags has enough spare bits
+	depends on 64BIT || !SPARSEMEM || SPARSEMEM_VMEMMAP
+	help
+	  A high performance LRU implementation to overcommit memory. See
+	  Documentation/admin-guide/mm/multigen_lru.rst for details.
+
+config LRU_GEN_ENABLED
+	bool "Enable by default"
+	depends on LRU_GEN
+	help
+	  This option enables the multi-gen LRU by default.
+
+config LRU_GEN_STATS
+	bool "Full stats for debugging"
+	depends on LRU_GEN
+	help
+	  Do not enable this option unless you plan to look at historical stats
+	  from evicted generations for debugging purpose.
+
+	  This option has a per-memcg and per-node memory overhead.
+# }
+
 config PRIORITIZE_OOM_TASKS
 	bool "Attempt to further prioritize OOM killer kills"
 	depends on QGKI
@@ -850,32 +893,6 @@ config OOM_TASK_PRIORITY_ADJ_LIMIT
 	  With this parameter you can limit the OOM killer to first kill
 	  tasks with an oom_score_adj value above a certain threshold
 	  before considering tasks with a lower oom_score_adj value.
-
-# multi-gen LRU {
-config LRU_GEN
-	bool "Multi-Gen LRU"
-	depends on MMU
-	# make sure page->flags has enough spare bits
-	depends on 64BIT || !SPARSEMEM || SPARSEMEM_VMEMMAP
-	help
-	  A high performance LRU implementation to overcommit memory. See
-	  Documentation/admin-guide/mm/multigen_lru.rst for details.
-
-config LRU_GEN_ENABLED
-	bool "Enable by default"
-	depends on LRU_GEN
-	help
-	  This option enables the multi-gen LRU by default.
-
-config LRU_GEN_STATS
-	bool "Full stats for debugging"
-	depends on LRU_GEN
-	help
-	  Do not enable this option unless you plan to look at historical stats
-	  from evicted generations for debugging purpose.
-
-	  This option has a per-memcg and per-node memory overhead.
-# }
 
 endmenu
 

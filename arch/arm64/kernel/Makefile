@@ -15,7 +15,7 @@ CFLAGS_REMOVE_return_address.o = $(CC_FLAGS_FTRACE)
 obj-y			:= debug-monitors.o entry.o irq.o fpsimd.o		\
 			   entry-fpsimd.o process.o ptrace.o setup.o signal.o	\
 			   sys.o stacktrace.o time.o traps.o io.o vdso.o	\
-			   hyp-stub.o psci.o cpu_ops.o 		\
+			   hyp-stub.o psci.o cpu_ops.o	\
 			   return_address.o cpuinfo.o cpu_errata.o		\
 			   cpufeature.o alternative.o cacheinfo.o		\
 			   smp.o smp_spin_table.o topology.o smccc-call.o	\
@@ -29,7 +29,9 @@ $(obj)/%.stub.o: $(obj)/%.o FORCE
 
 obj-$(CONFIG_COMPAT)			+= sys32.o signal32.o			\
 					   sys_compat.o
+ifneq ($(CONFIG_COMPAT_VDSO), y)
 obj-$(CONFIG_COMPAT)			+= sigreturn32.o
+endif
 obj-$(CONFIG_KUSER_HELPERS)		+= kuser32.o
 obj-$(CONFIG_FUNCTION_TRACER)		+= ftrace.o entry-ftrace.o
 obj-$(CONFIG_MODULES)			+= module.o
@@ -63,14 +65,9 @@ obj-$(CONFIG_ARM_SDE_INTERFACE)		+= sdei.o
 obj-$(CONFIG_ARM64_SSBD)		+= ssbd.o
 obj-$(CONFIG_ARM64_PTR_AUTH)		+= pointer_auth.o
 obj-$(CONFIG_SHADOW_CALL_STACK)		+= scs.o
-obj-y			          	+= vdso-wrap.o
-obj-$(CONFIG_COMPAT_VDSO)		+= vdso32-wrap.o
 
-# Force dependency (vdso*-wrap.S includes vdso.so through incbin)
-$(obj)/vdso-wrap.o: $(obj)/vdso/vdso.so
-$(obj)/vdso32-wrap.o: $(obj)/vdso32/vdso.so
-
-obj-y					+= probes/
+obj-y					+= vdso/ probes/
+obj-$(CONFIG_COMPAT_VDSO)		+= vdso32/
 head-y					:= head.o
 extra-y					+= $(head-y) vmlinux.lds
 

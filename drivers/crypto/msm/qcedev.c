@@ -1936,7 +1936,7 @@ long qcedev_ioctl(struct file *file,
 					goto exit_free_qcedev_areq;
 				}
 				map_buf.buf_vaddr[i] = vaddr;
-				pr_debug("%s: info: vaddr = %llx\n",
+				pr_info("%s: info: vaddr = %llx\n",
 					__func__, vaddr);
 			}
 
@@ -2163,8 +2163,11 @@ static int qcedev_remove(struct platform_device *pdev)
 	podev = platform_get_drvdata(pdev);
 	if (!podev)
 		return 0;
+
+	qcedev_ce_high_bw_req(podev, true);
 	if (podev->qce)
 		qce_close(podev->qce);
+	qcedev_ce_high_bw_req(podev, false);
 
 	if (podev->icc_path)
 		icc_put(podev->icc_path);

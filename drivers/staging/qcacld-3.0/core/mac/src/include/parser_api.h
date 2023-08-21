@@ -30,7 +30,7 @@
 #ifndef __PARSE_H__
 #define __PARSE_H__
 
-#include <stdarg.h>
+#include <linux/stdarg.h>
 #include "sir_mac_prop_exts.h"
 #include "dot11f.h"
 #include "lim_ft_defs.h"
@@ -1052,7 +1052,7 @@ QDF_STATUS populate_dot11f_rrm_ie(struct mac_context *mac,
 				struct pe_session *pe_session);
 
 void populate_mdie(struct mac_context *mac, tDot11fIEMobilityDomain *pDot11f,
-		   uint8_t mdie[]);
+		   uint8_t mdie[SIR_MDIE_SIZE]);
 
 #ifdef WLAN_FEATURE_FILS_SK
 /**

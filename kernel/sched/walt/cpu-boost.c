@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2015,2017,2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2017, Paranoid Android.
  */
 #define pr_fmt(fmt) "cpu-boost: " fmt
 
@@ -18,7 +17,6 @@
 #include <linux/pm_qos.h>
 #include <linux/sched/rt.h>
 #include <uapi/linux/sched/types.h>
-#include <drm/mi_disp_notifier.h>
 
 #include "qc_vas.h"
 
@@ -65,18 +63,7 @@ show_one(sched_boost_on_input);
 store_one(sched_boost_on_input);
 cpu_boost_attr_rw(sched_boost_on_input);
 
-static unsigned int wake_boost_enable = 1;
-show_one(wake_boost_enable);
-store_one(wake_boost_enable);
-cpu_boost_attr_rw(wake_boost_enable);
-
-static unsigned int wake_boost_ms = 1000;
-show_one(wake_boost_ms);
-store_one(wake_boost_ms);
-cpu_boost_attr_rw(wake_boost_ms);
-
 static bool sched_boost_active;
-static bool wake_boost_active;
 
 static struct delayed_work input_boost_rem;
 static u64 last_input_time;
@@ -158,12 +145,10 @@ static void boost_adjust_notify(struct cpufreq_policy *policy)
 {
 	unsigned int cpu = policy->cpu;
 	struct cpu_sync *s = &per_cpu(sync_info, cpu);
-	unsigned int ib_min = wake_boost_active ?
-		policy->cpuinfo.max_freq : s->input_boost_min;
+	unsigned int ib_min = s->input_boost_min;
 	struct freq_qos_request *req = &per_cpu(qos_req, cpu);
 	int ret;
 
-	pr_debug("Wake boost active = %d\n", wake_boost_active);
 	pr_debug("CPU%u policy min before boost: %u kHz\n",
 			 cpu, policy->min);
 	pr_debug("CPU%u boost min: %u kHz\n", cpu, ib_min);
@@ -215,10 +200,6 @@ static void do_input_boost_rem(struct work_struct *work)
 		i_sync_info->input_boost_min = 0;
 	}
 
-	/* Reset wake boost */
-	pr_debug("Resetting wake boost");
-	wake_boost_active = false;
-
 	/* Update policies for all online CPUs */
 	update_policy_online();
 
@@ -234,6 +215,9 @@ static void do_input_boost(struct kthread_work *work)
 {
 	unsigned int i, ret;
 	struct cpu_sync *i_sync_info;
+
+	if (!input_boost_ms)
+		return;
 
 	cancel_delayed_work_sync(&input_boost_rem);
 	if (sched_boost_active) {
@@ -260,17 +244,7 @@ static void do_input_boost(struct kthread_work *work)
 			sched_boost_active = true;
 	}
 
-	pr_debug("Wake boost active = %d\n", wake_boost_active);
-	schedule_delayed_work(&input_boost_rem,
-		msecs_to_jiffies(wake_boost_active ? wake_boost_ms : input_boost_ms));
-}
-
-static void cpuboost_queue_work(void)
-{
-	if (queuing_blocked(&cpu_boost_worker, &input_boost_work))
-		return;
-
-	kthread_queue_work(&cpu_boost_worker, &input_boost_work);
+	schedule_delayed_work(&input_boost_rem, msecs_to_jiffies(input_boost_ms));
 }
 
 static void cpuboost_input_event(struct input_handle *handle,
@@ -278,15 +252,17 @@ static void cpuboost_input_event(struct input_handle *handle,
 {
 	u64 now;
 
-	pr_debug("Wake boost active = %d\n", wake_boost_active);
-	if (!input_boost_enabled || wake_boost_active)
+	if (!input_boost_enabled)
 		return;
 
 	now = ktime_to_us(ktime_get());
 	if (now - last_input_time < MIN_INPUT_INTERVAL)
 		return;
 
-	cpuboost_queue_work();
+	if (queuing_blocked(&cpu_boost_worker, &input_boost_work))
+		return;
+
+	kthread_queue_work(&cpu_boost_worker, &input_boost_work);
 	last_input_time = ktime_to_us(ktime_get());
 }
 
@@ -361,45 +337,39 @@ static struct input_handler cpuboost_input_handler = {
 	.id_table       = cpuboost_ids,
 };
 
-static int mi_disp_notifier_cb(struct notifier_block *nb, unsigned long action,
-			  void *data)
-{
-	struct mi_disp_notifier *evdata = data;
-	int *blank = evdata->data;
-
-	pr_debug("Received display notifier callback\n");
-
-	if (wake_boost_enable && !wake_boost_active &&
-		action == MI_DISP_DPMS_EVENT && *blank == MI_DISP_DPMS_ON) {
-		pr_debug("Going to wakeboost\n");
-		wake_boost_active = true;
-		cpuboost_queue_work();
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block mi_disp_notif = {
-	.notifier_call = mi_disp_notifier_cb,
-	.priority = INT_MAX,
-};
-
 static struct kobject *cpu_boost_kobj;
 int cpu_boost_init(void)
 {
-	int cpu, ret;
+	int cpu, ret, i;
 	struct cpu_sync *s;
 	struct cpufreq_policy *policy;
 	struct freq_qos_request *req;
-	struct sched_param param = { .sched_priority = MAX_RT_PRIO - 2 };
+	struct sched_param param = { .sched_priority = 2 };
+	cpumask_t sys_bg_mask;
+
+	/* Hardcode the cpumask to bind the kthread to it */
+	cpumask_clear(&sys_bg_mask);
+	for (i = 0; i <= 3; i++) {
+		cpumask_set_cpu(i, &sys_bg_mask);
+	}
 
 	kthread_init_worker(&cpu_boost_worker);
-	cpu_boost_worker_thread = kthread_run(kthread_worker_fn,
+	cpu_boost_worker_thread = kthread_create(kthread_worker_fn,
 		&cpu_boost_worker, "cpu_boost_worker_thread");
-	if (IS_ERR(cpu_boost_worker_thread))
+	if (IS_ERR(cpu_boost_worker_thread)) {
+		pr_err("cpu-boost: Failed to init kworker!\n");
 		return -EFAULT;
+	}
+	ret = sched_setscheduler(cpu_boost_worker_thread, SCHED_FIFO, &param);
+	if (ret)
+		pr_err("cpu-boost: Failed to set SCHED_FIFO!\n");
 
-	sched_setscheduler(cpu_boost_worker_thread, SCHED_FIFO, &param);
+	/* Now bind it to the cpumask */
+	kthread_bind_mask(cpu_boost_worker_thread, &sys_bg_mask);
+
+	/* Wake it up! */
+	wake_up_process(cpu_boost_worker_thread);
+
 	kthread_init_work(&input_boost_work, do_input_boost);
 	INIT_DELAYED_WORK(&input_boost_rem, do_input_boost_rem);
 
@@ -441,18 +411,6 @@ int cpu_boost_init(void)
 				&sched_boost_on_input_attr.attr);
 	if (ret)
 		pr_err("Failed to create sched_boost_on_input node: %d\n", ret);
-
-	ret = sysfs_create_file(cpu_boost_kobj, &wake_boost_enable_attr.attr);
-	if (ret)
-		pr_err("Failed to create wake_boost_enable node: %d\n", ret);
-
-	ret = sysfs_create_file(cpu_boost_kobj, &wake_boost_ms_attr.attr);
-	if (ret)
-		pr_err("Failed to create wake_boost_ms node: %d\n", ret);
-
-	ret = mi_disp_register_client(&mi_disp_notif);
-	if (ret)
-		pr_err("Failed to register display notifier: %d\n", ret);
 
 	ret = input_register_handler(&cpuboost_input_handler);
 	return 0;

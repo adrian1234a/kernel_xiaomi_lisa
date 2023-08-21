@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
@@ -182,14 +181,6 @@ struct spi_geni_master {
 	bool slave_cross_connected;
 	bool use_fixed_timeout;
 };
-
-int geni_spi_get_master_irq(struct spi_device *spi_slv)
-{
-	struct spi_geni_master *mas = spi_master_get_devdata(spi_slv->master);
-
-	return mas->irq;
-}
-EXPORT_SYMBOL(geni_spi_get_master_irq);
 
 static void spi_slv_setup(struct spi_geni_master *mas);
 static void spi_geni_irq_enable(struct spi_geni_master *mas, bool irq_flag);

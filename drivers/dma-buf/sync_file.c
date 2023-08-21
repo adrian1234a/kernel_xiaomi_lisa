@@ -18,18 +18,12 @@
 #include <uapi/linux/sync_file.h>
 
 static const struct file_operations sync_file_fops;
-static struct kmem_cache *kmem_sync_file_pool;
-
-void __init init_sync_kmem_pool(void)
-{
-	kmem_sync_file_pool = KMEM_CACHE(sync_file, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
-}
 
 static struct sync_file *sync_file_alloc(void)
 {
 	struct sync_file *sync_file;
 
-	sync_file = kmem_cache_zalloc(kmem_sync_file_pool, GFP_KERNEL);
+	sync_file = kzalloc(sizeof(*sync_file), GFP_KERNEL);
 	if (!sync_file)
 		return NULL;
 
@@ -45,7 +39,7 @@ static struct sync_file *sync_file_alloc(void)
 	return sync_file;
 
 err:
-	kmem_cache_free(kmem_sync_file_pool, sync_file);
+	kfree(sync_file);
 	return NULL;
 }
 
@@ -183,8 +177,7 @@ static void add_fence(struct dma_fence **fences,
  * @a and @b.  @a and @b remain valid, independent sync_file. Returns the
  * new merged sync_file or NULL in case of error.
  */
-static struct sync_file *sync_file_merge(struct sync_file *a,
-					 struct sync_file *b)
+static struct sync_file *sync_file_merge(struct sync_file *a, struct sync_file *b)
 {
 	struct sync_file *sync_file;
 	struct dma_fence **fences = NULL, **nfences, **a_fences, **b_fences;
@@ -275,7 +268,7 @@ static int sync_file_release(struct inode *inode, struct file *file)
 	if (test_bit(POLL_ENABLED, &sync_file->flags))
 		dma_fence_remove_callback(sync_file->fence, &sync_file->cb);
 	dma_fence_put(sync_file->fence);
-	kmem_cache_free(kmem_sync_file_pool, sync_file);
+	kfree(sync_file);
 
 	return 0;
 }
@@ -424,8 +417,10 @@ static long sync_file_ioctl_fence_info(struct sync_file *sync_file,
 
 no_fences:
 	info.num_fences = num_fences;
+
 	if (copy_to_user((void __user *)arg, &info.status, len))
 		return -EFAULT;
+
 	return 0;
 }
 

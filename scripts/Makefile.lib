@@ -243,7 +243,7 @@ quiet_cmd_gzip = GZIP    $@
 # ---------------------------------------------------------------------------
 DTC ?= $(objtree)/scripts/dtc/dtc
 
-# Silence warnings
+# Silence all DTC warnings by default
 DTC_FLAGS += -q
 
 # Disable noisy checks by default
@@ -323,6 +323,18 @@ dtc-tmp = $(subst $(comma),_,$(dot-target).dts.tmp)
 # Concatentate multiple files together
 quiet_cmd_cat = CAT $@
 cmd_cat = (cat $(filter-out FORCE,$^) > $@) || (rm -f $@; false)
+
+# mkdtboimg
+#----------------------------------------------------------------------------
+ifneq ($(MKDTBO_EXT),)
+MKDTBO = $(MKDTBO_EXT)
+else
+MKDTBO = $(srctree)/scripts/mkdtboimg.py
+endif
+
+quiet_cmd_mkdtboimg = DTBOIMG $@
+cmd_mkdtboimg = $(PYTHON3) $(MKDTBO) create $@ \
+	--page_size=4096 $(filter-out FORCE,$^)
 
 # Bzip2
 # ---------------------------------------------------------------------------

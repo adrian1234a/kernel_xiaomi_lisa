@@ -5,15 +5,6 @@
  * Written by Martin Mares <mj@atrey.karlin.mff.cuni.cz>
  */
 
-#ifdef CONFIG_QCOM_RTIC
-#define BSS_FIRST_SECTIONS				\
-	. = ALIGN(PAGE_SIZE);				\
-	KEEP(*(.bss.rtic))				\
-	. = ALIGN(PAGE_SIZE);
-#else
-#define BSS_FIRST_SECTIONS
-#endif
-
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/cache.h>
 #include <asm/kernel-pgtable.h>
@@ -187,11 +178,11 @@ SECTIONS
 	. = ALIGN(4);
 	.altinstructions : {
 		__alt_instructions = .;
-		*(.altinstructions)
+		KEEP(*(.altinstructions))
 		__alt_instructions_end = .;
 	}
 	.altinstr_replacement : {
-		*(.altinstr_replacement)
+		KEEP(*(.altinstr_replacement))
 	}
 
 	. = ALIGN(PAGE_SIZE);

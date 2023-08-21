@@ -10,10 +10,6 @@ menuconfig INPUT_TOUCHSCREEN
 
 	  If unsure, say Y.
 
-config TOUCHSCREEN_QGKI_GOODIX
-	default n
-	bool "QGKI config"
-
 if INPUT_TOUCHSCREEN
 
 config TOUCHSCREEN_PROPERTIES
@@ -1321,10 +1317,6 @@ source "drivers/input/touchscreen/focaltech_touch/Kconfig"
 
 source "drivers/input/touchscreen/synaptics_tcm/Kconfig"
 
-source "drivers/input/touchscreen/xiaomi/Kconfig"
-
-source "drivers/input/touchscreen/gt9897t/Kconfig"
-
 config TOUCHSCREEN_SYNAPTICS_DSX
 	bool "Synaptics DSX Touchscreen Driver"
 	depends on I2C
@@ -1340,5 +1332,25 @@ config TOUCHSCREEN_SYNAPTICS_DSX
 source "drivers/input/touchscreen/synaptics_dsx/Kconfig"
 
 source "drivers/input/touchscreen/nt36xxx/Kconfig"
+
+source "drivers/input/touchscreen/cyttsp5/Kconfig"
+
+source "drivers/input/touchscreen/focaltech_spi/Kconfig"
+
+source "drivers/input/touchscreen/focaltech_3658u/Kconfig"
+
+source "drivers/input/touchscreen/focaltech_3680/Kconfig"
+
+source "drivers/input/touchscreen/fts_spi/Kconfig"
+
+source "drivers/input/touchscreen/fts_dual/Kconfig"
+
+source "drivers/input/touchscreen/gt9916/Kconfig"
+
+source "drivers/input/touchscreen/gt9897t/Kconfig"
+
+source "drivers/input/touchscreen/synaptics_s3908p/Kconfig"
+
+source "drivers/input/touchscreen/xiaomi/Kconfig"
 
 endif

@@ -50,8 +50,8 @@ static void qcom_wdt_dump_cpu_alive_mask(struct msm_watchdog_data *wdog_dd)
 {
 	static char alive_mask_buf[MASK_SIZE];
 
-	scnprintf(alive_mask_buf, MASK_SIZE, "%x",
-		  atomic_read(&wdog_dd->alive_mask));
+	scnprintf(alive_mask_buf, MASK_SIZE, "%x", atomic_read(
+				&wdog_dd->alive_mask));
 	dev_info(wdog_dd->dev, "cpu alive mask from last pet %s\n",
 				alive_mask_buf);
 }
@@ -717,6 +717,7 @@ static __ref int qcom_wdt_kthread(void *arg)
 		} while (ret != 0);
 
 		wdog_dd->thread_start = sched_clock();
+
 		if (wdog_dd->do_ipi_ping)
 			qcom_wdt_ping_other_cpus(wdog_dd);
 

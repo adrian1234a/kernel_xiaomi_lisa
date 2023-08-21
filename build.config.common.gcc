@@ -1,0 +1,39 @@
+BRANCH=android11-5.4
+KMI_GENERATION=2
+
+DEPMOD=depmod
+BUILDTOOLS_PREBUILT_BIN=build/build-tools/path/linux-x86
+MKDTBO_EXT=${ROOT_DIR}/tools/libufdt/utils/src/mkdtboimg.py
+
+KCFLAGS="${KCFLAGS} -D__ANDROID_COMMON_KERNEL__"
+STOP_SHIP_TRACEPRINTK=1
+IN_KERNEL_MODULES=1
+DO_NOT_STRIP_MODULES=1
+
+POST_DEFCONFIG_CMDS="check_defconfig && update_gcc_config"
+function update_gcc_config() {
+  # Disable clang-specific options
+  ${KERNEL_DIR}/scripts/config --file ${OUT_DIR}/.config \
+    -d LTO \
+    -d LTO_CLANG \
+    -d CFI \
+    -d CFI_PERMISSIVE \
+    -d CFI_CLANG \
+    -d SHADOW_CALL_STACK
+
+  (cd ${OUT_DIR} && \
+    make O=${OUT_DIR} $archsubarch CROSS_COMPILE=${CROSS_COMPILE} olddefconfig)
+}
+
+function enable_gcc_graphite() {
+  # Enable GCC Graphite
+  ${KERNEL_DIR}/scripts/config --file ${OUT_DIR}/.config \
+    -e GCC_GRAPHITE
+
+  (cd ${OUT_DIR} && \
+    make O=${OUT_DIR} $archsubarch CROSS_COMPILE=${CROSS_COMPILE} olddefconfig)
+}
+
+if [ ${GRAPHITE} == "1" ]; then
+        append_cmd POST_DEFCONFIG_CMDS "enable_gcc_graphite"
+fi
