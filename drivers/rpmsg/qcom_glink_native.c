@@ -1124,6 +1124,7 @@ static void qcom_glink_handle_intent(struct qcom_glink *glink,
 	spin_unlock_irqrestore(&glink->idr_lock, flags);
 	if (!channel) {
 		dev_err(glink->dev, "intents for non-existing channel\n");
+		qcom_glink_rx_advance(glink, ALIGN(msglen, 8));
 		return;
 	}
 
@@ -1263,7 +1264,6 @@ static irqreturn_t qcom_glink_native_intr(int irq, void *data)
 	if (should_wake) {
 		pr_info("%s: %d triggered %s\n", __func__, irq, glink->irqname);
 		glink_resume_pkt = true;
-		should_wake = false;
 		pm_system_wakeup();
 	}
 	/* To wakeup any blocking writers */
@@ -1888,7 +1888,7 @@ static void qcom_glink_rx_close(struct qcom_glink *glink, unsigned int rcid)
 	kthread_cancel_work_sync(&channel->intent_work);
 
 	if (channel->rpdev) {
-		strscpy_pad(chinfo.name, channel->name, sizeof(chinfo.name));
+		strlcpy(chinfo.name, channel->name, sizeof(chinfo.name));
 		chinfo.src = RPMSG_ADDR_ANY;
 		chinfo.dst = RPMSG_ADDR_ANY;
 

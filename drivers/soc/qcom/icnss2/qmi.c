@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
@@ -45,6 +44,14 @@
 #define ELF_BDF_FILE_NAME_K9D		"bd_k9d.elf"
 #define ELF_BDF_FILE_NAME_K9D_GLOBAL	"bd_k9dgl.elf"
 #define ELF_BDF_FILE_NAME_K9D_INDIA	"bd_k9din.elf"
+#define ELF_BDF_FILE_NAME_K9B		"bd_k9b.elf"
+#define ELF_BDF_FILE_NAME_K9E		"bd_k9e.elf"
+#define ELF_BDF_FILE_NAME_L9            "bd_l9.elf"
+#define ELF_BDF_FILE_NAME_L9_GLOBAL     "bd_l9gl.elf"
+#define ELF_BDF_FILE_NAME_L9_INDIA      "bd_l9in.elf"
+#define ELF_BDF_FILE_NAME_M20_GLOBAL    "bd_m20gl.elf"
+#define ELF_BDF_FILE_NAME_M20_INDIA     "bd_m20in.elf"
+#define ELF_BDF_FILE_NAME_M20           "bd_m20.elf"
 
 #define BIN_BDF_FILE_NAME		"bdwlan.bin"
 #define BIN_BDF_FILE_NAME_PREFIX	"bdwlan.b"
@@ -948,7 +955,8 @@ static int icnss_get_bdf_file_name(struct icnss_priv *priv,
 
 	switch (bdf_type) {
 	case ICNSS_BDF_ELF:
-		if (priv->board_id == 0xFF) {
+		if (priv->board_id == 0xFF)
+		{
 			if (hw_platform_ver == HARDWARE_PROJECT_K9D) {
 				if ((uint32_t)CountryGlobal == hw_country_ver) {
 					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9D_GLOBAL);
@@ -957,10 +965,30 @@ static int icnss_get_bdf_file_name(struct icnss_priv *priv,
 				} else {
 					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9D);
 				}
+			} else if (hw_platform_ver == HARDWARE_PROJECT_K9B) {
+				snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9B);
+			} else if (hw_platform_ver == HARDWARE_PROJECT_K9E) {
+				snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_K9E);
+			} else if (hw_platform_ver == HARDWARE_PROJECT_L9) {
+				if ((uint32_t)CountryGlobal == hw_country_ver) {
+					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_L9_GLOBAL);
+				} else if ((uint32_t)CountryIndia == hw_country_ver) {
+					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_L9_INDIA);
+				} else {
+					snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_L9);
+				}
+			} else if (hw_platform_ver == HARDWARE_PROJECT_M20) {
+				if ((uint32_t)CountryGlobal == hw_country_ver) {
+                                        snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_M20_GLOBAL);
+                                } else if ((uint32_t)CountryIndia == hw_country_ver) {
+                                        snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_M20_INDIA);
+                                } else {
+                                        snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME_M20);
+                                }
 			} else {
-                                snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME);
-                        }
-                }
+				snprintf(filename_tmp, filename_len, ELF_BDF_FILE_NAME);
+			}
+		}
 		else if (priv->board_id < 0xFF)
 			snprintf(filename_tmp, filename_len,
 				 ELF_BDF_FILE_NAME_PREFIX "%02x",

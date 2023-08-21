@@ -82,22 +82,22 @@ struct msm_pinctrl {
 static struct msm_pinctrl *msm_pinctrl_data;
 
 #define MSM_ACCESSOR(name) \
-static u32 __maybe_unused msm_readl_##name(struct msm_pinctrl *pctrl, \
+static __maybe_unused u32 msm_readl_##name(struct msm_pinctrl *pctrl, \
 			    const struct msm_pingroup *g) \
 { \
 	return readl(pctrl->regs[g->tile] + g->name##_reg); \
 } \
-static void __maybe_unused msm_writel_##name(u32 val, struct msm_pinctrl *pctrl, \
+static __maybe_unused void msm_writel_##name(u32 val, struct msm_pinctrl *pctrl, \
 			      const struct msm_pingroup *g) \
 { \
 	writel(val, pctrl->regs[g->tile] + g->name##_reg); \
 } \
-static u32 __maybe_unused msm_readl_relaxed_##name(struct msm_pinctrl *pctrl, \
+static __maybe_unused u32 msm_readl_relaxed_##name(struct msm_pinctrl *pctrl, \
 			    const struct msm_pingroup *g) \
 { \
 	return readl_relaxed(pctrl->regs[g->tile] + g->name##_reg); \
 } \
-static void __maybe_unused msm_writel_relaxed_##name(u32 val, struct msm_pinctrl *pctrl, \
+static __maybe_unused void msm_writel_relaxed_##name(u32 val, struct msm_pinctrl *pctrl, \
 			      const struct msm_pingroup *g) \
 { \
 	writel_relaxed(val, pctrl->regs[g->tile] + g->name##_reg); \
@@ -1664,6 +1664,39 @@ int msm_pinctrl_probe(struct platform_device *pdev,
 	platform_set_drvdata(pdev, pctrl);
 
 	dev_dbg(&pdev->dev, "Probed Qualcomm pinctrl driver\n");
+
+#ifdef CONFIG_PINCTRL_REDWOOD
+	// disable unused gpios for gic stuck
+	pr_err("Disable all unused GPIO  wakeup\n");
+	msm_gpio_mpm_wake_set(20, false);
+  	msm_gpio_mpm_wake_set(21, false);
+  	msm_gpio_mpm_wake_set(23, false);
+  	msm_gpio_mpm_wake_set(35, false);
+  	msm_gpio_mpm_wake_set(43, false);
+  	msm_gpio_mpm_wake_set(44, false);
+  	msm_gpio_mpm_wake_set(68, false);
+  	msm_gpio_mpm_wake_set(77, false);
+  	msm_gpio_mpm_wake_set(78, false);
+  	msm_gpio_mpm_wake_set(82, false);
+  	msm_gpio_mpm_wake_set(83, false);
+  	msm_gpio_mpm_wake_set(101, false);
+  	msm_gpio_mpm_wake_set(140, false);
+#endif
+
+#ifdef CONFIG_PINCTRL_SM7325
+	return 0;
+#endif
+
+#ifdef CONFIG_PINCTRL_RENOIR
+	pr_err("Disable GPIO151, 202  wakeup\n");
+	msm_gpio_mpm_wake_set(151, false);
+	msm_gpio_mpm_wake_set(202, false);
+#else
+	pr_err("Disable GPIO151, 200, 202 wakeup\n");
+	msm_gpio_mpm_wake_set(151, false);
+	msm_gpio_mpm_wake_set(200, false);
+	msm_gpio_mpm_wake_set(202, false);
+#endif
 
 	return 0;
 }

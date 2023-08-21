@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2022-2023 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
@@ -4827,16 +4826,6 @@ enum qca_wlan_vendor_attr_config {
 	 * this attribute are 1-Enable and 0-Disable.
 	 */
 	QCA_WLAN_VENDOR_ATTR_CONFIG_FT_OVER_DS = 80,
-
- 	/* 8-bit unsigned value to trigger dynamic nss feature.
-	 * 1-Enable, 0-Disable
-	 */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_DYNAMIC_NSS_SWITCH = 81,
-
-	/* 8-bit unsigned value to set bt in active or not.
-	 * 1-active, 0-inactive
-	 */
-	QCA_WLAN_VENDOR_ATTR_CONFIG_BT_ACTIVE = 82,
 
 	/* 8-bit unsigned value, whenever wifi calling (wfc) begin or end,
 	 * Userspace sends this information to driver/firmware to configure

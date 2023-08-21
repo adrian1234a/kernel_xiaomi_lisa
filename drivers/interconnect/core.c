@@ -3,7 +3,6 @@
  * Interconnect framework core driver
  *
  * Copyright (c) 2017-2019, Linaro Ltd.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Author: Georgi Djakov <georgi.djakov@linaro.org>
  */
 
@@ -493,8 +492,8 @@ int icc_set_bw(struct icc_path *path, u32 avg_bw, u32 peak_bw)
 
 	if (!path || !path->num_nodes)
 		return 0;
-	if(!oops_in_progress)
-		mutex_lock(&icc_lock);
+
+	mutex_lock(&icc_lock);
 
 	old_avg = path->reqs[0].avg_bw;
 	old_peak = path->reqs[0].peak_bw;
@@ -526,8 +525,7 @@ int icc_set_bw(struct icc_path *path, u32 avg_bw, u32 peak_bw)
 		apply_constraints(path);
 	}
 
-	if(!oops_in_progress)
-		mutex_unlock(&icc_lock);
+	mutex_unlock(&icc_lock);
 
 	trace_icc_set_bw_end(path, ret);
 
@@ -680,6 +678,10 @@ void icc_node_destroy(int id)
 
 	mutex_unlock(&icc_lock);
 
+	if (!node)
+		return;
+
+	kfree(node->links);
 	kfree(node);
 }
 EXPORT_SYMBOL_GPL(icc_node_destroy);

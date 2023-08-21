@@ -83,9 +83,6 @@ struct msm_gem_vma;
 
 #define TEARDOWN_DEADLOCK_RETRY_MAX 5
 
-extern atomic_t resume_pending;
-extern wait_queue_head_t resume_wait_q;
-
 struct msm_file_private {
 	rwlock_t queuelock;
 	struct list_head submitqueues;
@@ -179,8 +176,6 @@ enum msm_mdp_crtc_property {
 	CRTC_PROP_IDLE_PC_STATE,
 	CRTC_PROP_CACHE_STATE,
 	CRTC_PROP_VM_REQ_STATE,
-
-	CRCT_PROP_MI_FOD_SYNC_INFO,
 
 #ifdef CONFIG_DRM_SDE_EXPO
 	CRTC_PROP_DIM_LAYER_EXPO,
@@ -834,15 +829,6 @@ struct msm_drm_thread {
 	struct kthread_worker worker;
 };
 
-struct msm_idle {
-	u32 timeout_ms;
-	u32 encoder_mask;
-	u32 active_mask;
-
-	spinlock_t lock;
-	struct delayed_work work;
-};
-
 struct msm_drm_private {
 
 	struct drm_device *dev;
@@ -956,8 +942,6 @@ struct msm_drm_private {
 
 	struct mutex vm_client_lock;
 	struct list_head vm_client_list;
-
-	struct msm_idle idle;
 };
 
 /* get struct msm_kms * from drm_device * */
@@ -1233,7 +1217,6 @@ static inline void __exit msm_mdp_unregister(void)
 }
 #endif /* CONFIG_DRM_MSM_MDP5 */
 
-void msm_idle_set_state(struct drm_encoder *encoder, bool active);
 #ifdef CONFIG_DEBUG_FS
 void msm_gem_describe(struct drm_gem_object *obj, struct seq_file *m);
 void msm_gem_describe_objects(struct list_head *list, struct seq_file *m);

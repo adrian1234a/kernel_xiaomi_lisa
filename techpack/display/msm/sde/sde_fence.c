@@ -86,6 +86,7 @@ uint32_t sde_sync_get_name_prefix(void *fence)
 struct sde_fence {
 	struct dma_fence base;
 	struct sde_fence_context *ctx;
+	char name[SDE_FENCE_NAME_SIZE];
 	struct list_head	fence_list;
 	int fd;
 };
@@ -110,7 +111,7 @@ static inline struct sde_fence *to_sde_fence(struct dma_fence *fence)
 
 static const char *sde_fence_get_driver_name(struct dma_fence *fence)
 {
-	return "sde_fence";
+	return "sde";
 }
 
 static const char *sde_fence_get_timeline_name(struct dma_fence *fence)
@@ -246,6 +247,8 @@ struct sde_fence_context *sde_fence_init(const char *name, uint32_t drm_id)
 		return ERR_PTR(-ENOMEM);
 	}
 
+	kmem_fence_pool = KMEM_CACHE(sde_fence, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
+
 	ctx->drm_id = drm_id;
 	kref_init(&ctx->kref);
 	ctx->context = dma_fence_context_alloc(1);
@@ -265,6 +268,8 @@ void sde_fence_deinit(struct sde_fence_context *ctx)
 	}
 
 	kref_put(&ctx->kref, sde_fence_destroy);
+
+	kmem_cache_destroy(kmem_fence_pool);
 }
 
 void sde_fence_prepare(struct sde_fence_context *ctx)
@@ -469,11 +474,3 @@ void sde_debugfs_timeline_dump(struct sde_fence_context *ctx,
 	}
 	spin_unlock(&ctx->list_lock);
 }
-
-static int __init sde_kmem_pool_init(void)
-{
-	kmem_fence_pool = KMEM_CACHE(sde_fence, SLAB_HWCACHE_ALIGN | SLAB_PANIC);
-	return 0;
-}
-
-module_init(sde_kmem_pool_init);

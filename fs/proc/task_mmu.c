@@ -528,16 +528,19 @@ show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 		 * program uses newlines in its paths then it can kick rocks.
 		 */
 		if (size > 1) {
+			const int inlen = size - 1;
+			int outlen = inlen;
 			char *p;
 
-			p = d_path(&file->f_path, buf, size);
+			p = d_path_outlen(&file->f_path, buf, &outlen);
 			if (!IS_ERR(p)) {
 				size_t len;
 
-				/* Minus one to exclude the NUL character */
-				len = size - (p - buf) - 1;
-				if (likely(p > buf))
-					memmove(buf, p, len);
+				if (outlen != inlen)
+					len = inlen - outlen - 1;
+				else
+					len = strlen(p);
+				memmove(buf, p, len);
 				buf[len] = '\n';
 				seq_commit(m, len + 1);
 				return;
@@ -775,10 +778,16 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 			page = device_private_entry_to_page(swpent);
 	} else if (unlikely(IS_ENABLED(CONFIG_SHMEM) && mss->check_shmem_swap
 							&& pte_none(*pte))) {
-		page = xa_load(&vma->vm_file->f_mapping->i_pages,
+		page = find_get_entry(vma->vm_file->f_mapping,
 						linear_page_index(vma, addr));
+		if (!page)
+			return;
+
 		if (xa_is_value(page))
 			mss->swap += PAGE_SIZE;
+		else
+			put_page(page);
+
 		return;
 	}
 
@@ -942,9 +951,7 @@ static int smaps_hugetlb_range(pte_t *pte, unsigned long hmask,
 			page = device_private_entry_to_page(swpent);
 	}
 	if (page) {
-		int mapcount = page_mapcount(page);
-
-		if (mapcount >= 2)
+		if (page_mapcount(page) >= 2 || hugetlb_pmd_shared(pte))
 			mss->shared_hugetlb += huge_page_size(hstate_vma(vma));
 		else
 			mss->private_hugetlb += huge_page_size(hstate_vma(vma));
@@ -1361,6 +1368,7 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 	enum clear_refs_types type;
+	struct mmu_gather tlb;
 	int itype;
 	int rv;
 
@@ -1405,6 +1413,7 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 			count = -EINTR;
 			goto out_mm;
 		}
+		tlb_gather_mmu(&tlb, mm, 0, -1);
 		if (type == CLEAR_REFS_SOFT_DIRTY) {
 			for (vma = mm->mmap; vma; vma = vma->vm_next) {
 				if (!(vma->vm_flags & VM_SOFTDIRTY))
@@ -1443,18 +1452,15 @@ static ssize_t clear_refs_write(struct file *file, const char __user *buf,
 				break;
 			}
 
-			inc_tlb_flush_pending(mm);
 			mmu_notifier_range_init(&range, MMU_NOTIFY_SOFT_DIRTY,
 						0, NULL, mm, 0, -1UL);
 			mmu_notifier_invalidate_range_start(&range);
 		}
 		walk_page_range(mm, 0, mm->highest_vm_end, &clear_refs_walk_ops,
 				&cp);
-		if (type == CLEAR_REFS_SOFT_DIRTY) {
+		if (type == CLEAR_REFS_SOFT_DIRTY)
 			mmu_notifier_invalidate_range_end(&range);
-			flush_tlb_mm(mm);
-			dec_tlb_flush_pending(mm);
-		}
+		tlb_finish_mmu(&tlb, 0, -1);
 		up_read(&mm->mmap_sem);
 out_mm:
 		mmput(mm);

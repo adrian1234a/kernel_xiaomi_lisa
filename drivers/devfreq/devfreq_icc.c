@@ -26,7 +26,6 @@
 #include <linux/platform_device.h>
 #include <linux/interconnect.h>
 #include <soc/qcom/devfreq_icc.h>
-#include <linux/devfreq_boost.h>
 
 /* Has to be UL to avoid errors in 32 bit. Use cautiously to avoid overflows.*/
 #define MBYTE (1UL << 20)
@@ -232,7 +231,7 @@ int devfreq_add_icc(struct device *dev)
 	}
 
 	p = &d->dp;
-	p->polling_ms = 50;
+	p->polling_ms = 500;
 	p->target = icc_target;
 	p->get_dev_status = icc_get_dev_status;
 
@@ -288,12 +287,6 @@ int devfreq_add_icc(struct device *dev)
 		icc_put(d->icc_path);
 		return PTR_ERR(d->df);
 	}
-
-	if (!strcmp(dev_name(dev), "soc:qcom,cpu-cpu-llcc-bw"))
-		devfreq_register_boost_device(DEVFREQ_MSM_CPUBW, d->df);
-
-	if (!strcmp(dev_name(dev), "soc:qcom,cpu-llcc-ddr-bw"))
-		devfreq_register_boost_device(DEVFREQ_MSM_LLCCBW, d->df);
 
 	return 0;
 }

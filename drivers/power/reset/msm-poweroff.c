@@ -218,7 +218,7 @@ static void *map_prop_mem(const char *propname)
 	void *addr;
 
 	if (!np) {
-		pr_err("Unable to find DT property: %s\n", propname);
+		pr_debug("Unable to find DT property: %s\n", propname);
 		return NULL;
 	}
 
@@ -427,7 +427,7 @@ static void msm_restart_prepare(const char *cmd)
 		pr_info("Forcing a warm reset of the system\n");
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
-	if (in_panic || force_warm_reboot || need_warm_reset)
+	if (force_warm_reboot || need_warm_reset)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);

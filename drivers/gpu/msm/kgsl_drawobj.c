@@ -34,9 +34,6 @@
  * allocate and free them so frequently
  */
 static struct kmem_cache *memobjs_cache;
-static struct kmem_cache *timeline_cache;
-static struct kmem_cache *sync_cache;
-static struct kmem_cache *cmd_cache;
 
 static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 {
@@ -52,17 +49,17 @@ static void syncobj_destroy_object(struct kgsl_drawobj *drawobj)
 	}
 
 	kfree(syncobj->synclist);
-	kmem_cache_free(sync_cache, syncobj);
+	kfree(syncobj);
 }
 
 static void cmdobj_destroy_object(struct kgsl_drawobj *drawobj)
 {
-	kmem_cache_free(cmd_cache, CMDOBJ(drawobj));
+	kfree(CMDOBJ(drawobj));
 }
 
 static void timelineobj_destroy_object(struct kgsl_drawobj *drawobj)
 {
-	kmem_cache_free(timeline_cache, TIMELINEOBJ(drawobj));
+	kfree(TIMELINEOBJ(drawobj));
 }
 
 void kgsl_drawobj_destroy_object(struct kref *kref)
@@ -139,10 +136,6 @@ static void syncobj_timer(struct timer_list *t)
 	dev_err(device->dev,
 		"kgsl: possible gpu syncpoint deadlock for context %u timestamp %u\n",
 		drawobj->context->id, drawobj->timestamp);
-
-	set_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
-	kgsl_context_dump(drawobj->context);
-	clear_bit(ADRENO_CONTEXT_FENCE_LOG, &drawobj->context->priv);
 
 	dev_err(device->dev, "      pending events:\n");
 
@@ -778,7 +771,7 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 {
 	int ret;
 	struct kgsl_drawobj_timeline *timelineobj =
-		kmem_cache_zalloc(timeline_cache, GFP_KERNEL);
+		kzalloc(sizeof(*timelineobj), GFP_KERNEL);
 
 	if (!timelineobj)
 		return ERR_PTR(-ENOMEM);
@@ -786,7 +779,7 @@ kgsl_drawobj_timeline_create(struct kgsl_device *device,
 	ret = drawobj_init(device, context, &timelineobj->base,
 		TIMELINEOBJ_TYPE);
 	if (ret) {
-		kmem_cache_free(timeline_cache, timelineobj);
+		kfree(timelineobj);
 		return ERR_PTR(ret);
 	}
 
@@ -868,7 +861,7 @@ struct kgsl_drawobj_sync *kgsl_drawobj_sync_create(struct kgsl_device *device,
 		struct kgsl_context *context)
 {
 	struct kgsl_drawobj_sync *syncobj =
-		kmem_cache_zalloc(sync_cache, GFP_KERNEL);
+		kzalloc(sizeof(*syncobj), GFP_KERNEL);
 	int ret;
 
 	if (!syncobj)
@@ -876,7 +869,7 @@ struct kgsl_drawobj_sync *kgsl_drawobj_sync_create(struct kgsl_device *device,
 
 	ret = drawobj_init(device, context, &syncobj->base, SYNCOBJ_TYPE);
 	if (ret) {
-		kmem_cache_free(sync_cache, syncobj);
+		kfree(syncobj);
 		return ERR_PTR(ret);
 	}
 
@@ -902,8 +895,7 @@ struct kgsl_drawobj_cmd *kgsl_drawobj_cmd_create(struct kgsl_device *device,
 		struct kgsl_context *context, unsigned int flags,
 		unsigned int type)
 {
-	struct kgsl_drawobj_cmd *cmdobj =
-		kmem_cache_zalloc(cmd_cache, GFP_KERNEL);
+	struct kgsl_drawobj_cmd *cmdobj = kzalloc(sizeof(*cmdobj), GFP_KERNEL);
 	int ret;
 
 	if (!cmdobj)
@@ -912,7 +904,7 @@ struct kgsl_drawobj_cmd *kgsl_drawobj_cmd_create(struct kgsl_device *device,
 	ret = drawobj_init(device, context, &cmdobj->base,
 		(type & (CMDOBJ_TYPE | MARKEROBJ_TYPE)));
 	if (ret) {
-		kmem_cache_free(cmd_cache, cmdobj);
+		kfree(cmdobj);
 		return ERR_PTR(ret);
 	}
 
@@ -1283,19 +1275,13 @@ int kgsl_drawobj_sync_add_synclist(struct kgsl_device *device,
 void kgsl_drawobjs_cache_exit(void)
 {
 	kmem_cache_destroy(memobjs_cache);
-	kmem_cache_destroy(timeline_cache);
-	kmem_cache_destroy(sync_cache);
-	kmem_cache_destroy(cmd_cache);
 }
 
 int kgsl_drawobjs_cache_init(void)
 {
-	memobjs_cache = KMEM_CACHE(kgsl_memobj_node, SLAB_HWCACHE_ALIGN);
-	timeline_cache = KMEM_CACHE(kgsl_drawobj_timeline, SLAB_HWCACHE_ALIGN);
-	sync_cache = KMEM_CACHE(kgsl_drawobj_sync, SLAB_HWCACHE_ALIGN);
-	cmd_cache = KMEM_CACHE(kgsl_drawobj_cmd, SLAB_HWCACHE_ALIGN);
+	memobjs_cache = KMEM_CACHE(kgsl_memobj_node, 0);
 
-	if (!memobjs_cache || !timeline_cache || !sync_cache || !cmd_cache)
+	if (!memobjs_cache)
 		return -ENOMEM;
 
 	return 0;

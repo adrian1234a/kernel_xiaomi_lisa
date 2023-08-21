@@ -37,8 +37,6 @@
 #include <linux/uaccess.h>
 #include <linux/sync_file.h>
 #include <linux/file.h>
-#include <linux/devfreq_boost.h>
-#include <linux/pm_qos.h>
 
 #include "drm_crtc_internal.h"
 
@@ -77,15 +75,17 @@ int drm_atomic_set_mode_for_crtc(struct drm_crtc_state *state,
 	state->mode_blob = NULL;
 
 	if (mode) {
+		struct drm_property_blob *blob;
+
 		drm_mode_convert_to_umode(&umode, mode);
-		state->mode_blob =
-			drm_property_create_blob(state->crtc->dev,
-		                                 sizeof(umode),
-		                                 &umode);
-		if (IS_ERR(state->mode_blob))
-			return PTR_ERR(state->mode_blob);
+		blob = drm_property_create_blob(crtc->dev,
+						sizeof(umode), &umode);
+		if (IS_ERR(blob))
+			return PTR_ERR(blob);
 
 		drm_mode_copy(&state->mode, mode);
+
+		state->mode_blob = blob;
 		state->enable = true;
 		DRM_DEBUG_ATOMIC("Set [MODE:%s] for [CRTC:%d:%s] state %p\n",
 				 mode->name, crtc->base.id, crtc->name, state);
@@ -1275,7 +1275,7 @@ static void complete_signaling(struct drm_device *dev,
 	kfree(fence_state);
 }
 
-static int __drm_mode_atomic_ioctl(struct drm_device *dev,
+int drm_mode_atomic_ioctl(struct drm_device *dev,
 			  void *data, struct drm_file *file_priv)
 {
 	struct drm_mode_atomic *arg = data;
@@ -1314,12 +1314,6 @@ static int __drm_mode_atomic_ioctl(struct drm_device *dev,
 	if ((arg->flags & DRM_MODE_ATOMIC_TEST_ONLY) &&
 			(arg->flags & DRM_MODE_PAGE_FLIP_EVENT))
 		return -EINVAL;
-
-	if (!(arg->flags & DRM_MODE_ATOMIC_TEST_ONLY) &&
-			df_boost_within_input(3250)) {
-		devfreq_boost_kick(DEVFREQ_MSM_CPUBW);
-		devfreq_boost_kick(DEVFREQ_MSM_LLCCBW);
-	}
 
 	state = drm_atomic_state_alloc(dev);
 	if (!state)
@@ -1433,31 +1427,6 @@ out:
 
 	drm_modeset_drop_locks(&ctx);
 	drm_modeset_acquire_fini(&ctx);
-
-	return ret;
-}
-
-int drm_mode_atomic_ioctl(struct drm_device *dev, void *data,
-			  struct drm_file *file_priv)
-{
-	/*
-	 * Optimistically assume the current task won't migrate to another CPU
-	 * and restrict the current CPU to shallow idle states so that it won't
-	 * take too long to finish running the ioctl whenever the ioctl runs a
-	 * command that sleeps, such as for an "atomic" commit. Apply this
-	 * restriction to the prime CPU as well in anticipation of it processing
-	 * the DRM IRQ and any other display commit work, so that it wakes up
-	 * now if it's in a deep idle state.
-	 */
-	struct pm_qos_request req = {
-		.type = PM_QOS_REQ_AFFINE_CORES,
-		.cpus_affine = BIT(raw_smp_processor_id())
-	};
-	int ret;
-
-	pm_qos_add_request(&req, PM_QOS_CPU_DMA_LATENCY, 100);
-	ret = __drm_mode_atomic_ioctl(dev, data, file_priv);
-	pm_qos_remove_request(&req);
 
 	return ret;
 }

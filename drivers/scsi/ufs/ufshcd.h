@@ -74,9 +74,6 @@
 #include "ufs_quirks.h"
 #include "ufshci.h"
 
-#if defined(CONFIG_UFSFEATURE)
-#include "ufsfeature.h"
-#endif
 #if defined(CONFIG_SCSI_SKHPB)
 #include "ufshpb_skh.h"
 #endif
@@ -92,30 +89,6 @@ enum dev_cmd_type {
 	DEV_CMD_TYPE_NOP		= 0x0,
 	DEV_CMD_TYPE_QUERY		= 0x1,
 };
-
-#define ufs_spin_lock_irqsave(lock, flags)				\
-do {	\
-	if (!oops_in_progress)\
-		spin_lock_irqsave(lock, flags);	\
-} while (0)
-
-#define ufs_spin_unlock_irqrestore(lock, flags)				\
-do {	\
-	if (!oops_in_progress)\
-		spin_unlock_irqrestore(lock, flags);	\
-} while (0)
-
-#define ufs_spin_lock(lock)				\
-do {	\
-	if (!oops_in_progress)\
-		spin_lock(lock);	\
-} while (0)
-
-#define ufs_spin_unlock(lock)				\
-do {	\
-	if (!oops_in_progress)\
-		spin_unlock(lock);	\
-} while (0)
 
 /**
  * struct uic_command - UIC command structure
@@ -1060,9 +1033,7 @@ struct ufs_hba {
 	u8 hpb_control_mode;
 #define SKHPB_U8_MAX 0xFF
 	u8 skhpb_quicklist_lu_enable[UFS_UPIU_MAX_GENERAL_LUN];
-#endif
 
-#if defined(CONFIG_SCSI_SKHPB)
 	struct scsi_device *sdev_ufs_lu[UFS_UPIU_MAX_GENERAL_LUN];
 #endif
 #ifdef CONFIG_SCSI_UFS_CRYPTO
@@ -1091,15 +1062,10 @@ struct ufs_hba {
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);
 	ANDROID_KABI_RESERVE(4);
-
 #ifdef CONFIG_SCSI_UFSHCD_QTI
 	/* distinguish between resume and restore */
 	bool restore;
 	bool abort_triggered_wlun;
-#endif
-
-#if defined(CONFIG_UFSFEATURE)
-	struct ufsf_feature ufsf;
 #endif
 };
 
@@ -1187,10 +1153,6 @@ static inline bool ufshcd_is_auto_hibern8_enabled(struct ufs_hba *hba)
 
 static inline bool ufshcd_is_wb_allowed(struct ufs_hba *hba)
 {
-#if defined(CONFIG_UFSTW)
-	if (is_samsung_ufs(hba))
-		return false;
-#endif
 	return hba->caps & UFSHCD_CAP_WB_EN;
 }
 
@@ -1365,13 +1327,6 @@ void ufshcd_fixup_dev_quirks(struct ufs_hba *hba, struct ufs_dev_fix *fixups);
 #define SD_ASCII_STD true
 #define SD_RAW false
 
-#if defined(CONFIG_UFSFEATURE)
-int ufshcd_exec_dev_cmd(struct ufs_hba *hba,
-			enum dev_cmd_type cmd_type, int timeout);
-void ufshcd_scsi_block_requests(struct ufs_hba *hba);
-void ufshcd_scsi_unblock_requests(struct ufs_hba *hba);
-int ufshcd_wait_for_doorbell_clr(struct ufs_hba *hba, u64 wait_timeout_us);
-#endif
 int ufshcd_hold(struct ufs_hba *hba, bool async);
 void ufshcd_release(struct ufs_hba *hba);
 

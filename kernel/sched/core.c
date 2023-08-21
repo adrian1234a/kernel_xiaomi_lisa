@@ -66,7 +66,7 @@ const_debug unsigned int sysctl_sched_features =
  * Number of tasks to iterate in a single balance run.
  * Limited because this is done with IRQs disabled.
  */
-const_debug unsigned int sysctl_sched_nr_migrate = 32;
+const_debug unsigned int sysctl_sched_nr_migrate = 64;
 
 /*
  * period over which we measure -rt task CPU usage in us.
@@ -268,9 +268,8 @@ static enum hrtimer_restart hrtick(struct hrtimer *timer)
 static void __hrtick_restart(struct rq *rq)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
-	ktime_t time = rq->hrtick_time;
 
-	hrtimer_start(timer, time, HRTIMER_MODE_ABS_PINNED_HARD);
+	hrtimer_start_expires(timer, HRTIMER_MODE_ABS_PINNED_HARD);
 }
 
 /*
@@ -295,6 +294,7 @@ static void __hrtick_start(void *arg)
 void hrtick_start(struct rq *rq, u64 delay)
 {
 	struct hrtimer *timer = &rq->hrtick_timer;
+	ktime_t time;
 	s64 delta;
 
 	/*
@@ -302,7 +302,9 @@ void hrtick_start(struct rq *rq, u64 delay)
 	 * doesn't make sense and can cause timer DoS.
 	 */
 	delta = max_t(s64, delay, 10000LL);
-	rq->hrtick_time = ktime_add_ns(timer->base->get_time(), delta);
+	time = ktime_add_ns(timer->base->get_time(), delta);
+
+	hrtimer_set_expires(timer, time);
 
 	if (rq == this_rq()) {
 		__hrtick_restart(rq);
@@ -814,21 +816,6 @@ unsigned int sysctl_sched_uclamp_util_min = SCHED_CAPACITY_SCALE;
 /* Max allowed maximum utilization */
 unsigned int sysctl_sched_uclamp_util_max = SCHED_CAPACITY_SCALE;
 
-/*
- * Ignore uclamp_max for tasks if
- *
- *	runtime < sched_slice() / divider
- *
- * ==>
- *
- *	runtime * divider < sched_slice()
- *
- * where
- *
- *	divider = 1 << sysctl_sched_uclamp_max_filter_divider
- */
-unsigned int sysctl_sched_uclamp_max_filter_divider = 2;
-
 /* All clamps are required to be less or equal than these values */
 static struct uclamp_se uclamp_default[UCLAMP_CNT];
 
@@ -1002,7 +989,7 @@ unsigned long uclamp_eff_value(struct task_struct *p, enum uclamp_id clamp_id)
  * This "local max aggregation" allows to track the exact "requested" value
  * for each bucket when all its RUNNABLE tasks require the same clamp.
  */
-inline void uclamp_rq_inc_id(struct rq *rq, struct task_struct *p,
+static inline void uclamp_rq_inc_id(struct rq *rq, struct task_struct *p,
 				    enum uclamp_id clamp_id)
 {
 	struct uclamp_rq *uc_rq = &rq->uclamp[clamp_id];
@@ -1040,7 +1027,7 @@ inline void uclamp_rq_inc_id(struct rq *rq, struct task_struct *p,
  * always valid. If it's detected they are not, as defensive programming,
  * enforce the expected state and warn.
  */
-inline void uclamp_rq_dec_id(struct rq *rq, struct task_struct *p,
+static inline void uclamp_rq_dec_id(struct rq *rq, struct task_struct *p,
 				    enum uclamp_id clamp_id)
 {
 	struct uclamp_rq *uc_rq = &rq->uclamp[clamp_id];
@@ -1361,8 +1348,6 @@ static void uclamp_fork(struct task_struct *p)
 	for_each_clamp_id(clamp_id)
 		p->uclamp[clamp_id].active = false;
 
-	p->uclamp_req[UCLAMP_MAX].ignore_uclamp_max = 0;
-
 	if (likely(!p->sched_reset_on_fork))
 		return;
 
@@ -1401,8 +1386,6 @@ static void __init init_uclamp(void)
 		uclamp_se_set(&init_task.uclamp_req[clamp_id],
 			      uclamp_none(clamp_id), false);
 	}
-
-	init_task.uclamp_req[UCLAMP_MAX].ignore_uclamp_max = 0;
 
 	/* System defaults allow max clamp values for both indexes */
 	uclamp_se_set(&uc_max, uclamp_none(UCLAMP_MAX), false);
@@ -1470,6 +1453,9 @@ static inline void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 
 void activate_task(struct rq *rq, struct task_struct *p, int flags)
 {
+	if (task_on_rq_migrating(p))
+		flags |= ENQUEUE_MIGRATED;
+
 	if (task_contributes_to_load(p))
 		rq->nr_uninterruptible--;
 
@@ -1801,9 +1787,8 @@ static int __set_cpus_allowed_ptr(struct task_struct *p,
 #endif
 
 	/* Don't allow perf-critical threads to have non-perf affinities */
-	if ((p->flags & PF_PERF_CRITICAL) && new_mask != cpu_lp_mask &&
-	    new_mask != cpu_perf_mask && new_mask != cpu_prime_mask &&
-	    new_mask != cpu_drm_mask && new_mask != cpu_kgsl_mask)
+	if ((p->flags & PF_PERF_CRITICAL) && new_mask != cpu_perf_mask &&
+	    new_mask != cpu_prime_mask)
 		return -EINVAL;
 
 	rq = task_rq_lock(p, &rf);
@@ -2309,7 +2294,7 @@ out:
 		 * leave kernel.
 		 */
 		if (p->mm && printk_ratelimit()) {
-			printk_deferred("process %d (%s) no longer affine to cpu%d\n",
+			pr_debug("process %d (%s) no longer affine to cpu%d\n",
 					task_pid_nr(p), p->comm, cpu);
 		}
 	}
@@ -2579,16 +2564,6 @@ void scheduler_ipi(void)
 		raise_softirq_irqoff(SCHED_SOFTIRQ);
 	}
 	irq_exit();
-}
-
-void send_call_function_single_ipi(int cpu)
-{
-	struct rq *rq = cpu_rq(cpu);
-
-	if (!set_nr_if_polling(rq->idle))
-		arch_send_call_function_single_ipi(cpu);
-	else
-		trace_sched_wake_idle_without_ipi(cpu);
 }
 
 static void ttwu_queue_remote(struct task_struct *p, int cpu, int wake_flags)
@@ -4189,7 +4164,13 @@ static noinline void __schedule_bug(struct task_struct *prev)
 		print_ip_sym(preempt_disable_ip);
 		pr_cont("\n");
 	}
-	panic("scheduling while atomic\n");
+	check_panic_on_warn("scheduling while atomic");
+
+#ifdef CONFIG_PANIC_ON_SCHED_BUG
+	BUG();
+#endif
+	dump_stack();
+	add_taint(TAINT_WARN, LOCKDEP_STILL_OK);
 }
 
 /*
@@ -5023,8 +5004,7 @@ static void __setscheduler_params(struct task_struct *p,
 	if (policy == SETPARAM_POLICY)
 		policy = p->policy;
 
-	/* Replace SCHED_FIFO with SCHED_RR to reduce latency */
-	p->policy = policy == SCHED_FIFO ? SCHED_RR : policy;
+	p->policy = policy;
 
 	if (dl_policy(policy))
 		__setparam_dl(p, attr);
@@ -5976,14 +5956,14 @@ SYSCALL_DEFINE3(sched_getaffinity, pid_t, pid, unsigned int, len,
 	if (len & (sizeof(unsigned long)-1))
 		return -EINVAL;
 
-	if (!alloc_cpumask_var(&mask, GFP_KERNEL))
+	if (!zalloc_cpumask_var(&mask, GFP_KERNEL))
 		return -ENOMEM;
 
 	ret = sched_getaffinity(pid, mask);
 	if (ret == 0) {
 		unsigned int retlen = min(len, cpumask_size());
 
-		if (copy_to_user(user_mask_ptr, mask, retlen))
+		if (copy_to_user(user_mask_ptr, cpumask_bits(mask), retlen))
 			ret = -EFAULT;
 		else
 			ret = retlen;

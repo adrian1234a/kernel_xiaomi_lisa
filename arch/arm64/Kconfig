@@ -103,7 +103,6 @@ config ARM64
 	select GENERIC_CPU_AUTOPROBE
 	select GENERIC_CPU_VULNERABILITIES
 	select GENERIC_EARLY_IOREMAP
-	select GENERIC_FIND_FIRST_BIT
 	select GENERIC_IDLE_POLL_SETUP
 	select GENERIC_IRQ_MULTI_HANDLER
 	select GENERIC_IRQ_PROBE
@@ -118,8 +117,6 @@ config ARM64
 	select GENERIC_GETTIMEOFDAY
 	select HANDLE_DOMAIN_IRQ
 	select HARDIRQS_SW_RESEND
-	select HAVE_MOVE_PMD
-	select HAVE_MOVE_PUD
 	select HAVE_PCI
 	select HAVE_ACPI_APEI if (ACPI && EFI)
 	select HAVE_ALIGNED_STRUCT_PAGE if SLUB
@@ -169,8 +166,7 @@ config ARM64
 	select HAVE_PERF_USER_STACK_DUMP
 	select HAVE_REGS_AND_STACK_ACCESS_API
 	select HAVE_FUNCTION_ARG_ACCESS_API
-	select HAVE_FUTEX_CMPXCHG if FUTEX
-	select MMU_GATHER_RCU_TABLE_FREE
+	select HAVE_RCU_TABLE_FREE
 	select HAVE_RSEQ
 	select HAVE_STACKPROTECTOR
 	select HAVE_SYSCALL_TRACEPOINTS
@@ -187,6 +183,7 @@ config ARM64
 	select OF_EARLY_FLATTREE
 	select PCI_DOMAINS_GENERIC if PCI
 	select PCI_ECAM if (ACPI && PCI)
+	select PCI_LOCKLESS_CONFIG if PCI && ARCH_QCOM
 	select PCI_SYSCALL if PCI
 	select POWER_RESET
 	select POWER_SUPPLY
@@ -323,6 +320,9 @@ config ARCH_SUPPORTS_UPROBES
 
 config ARCH_PROC_KCORE_TEXT
 	def_bool y
+
+config BROKEN_GAS_INST
+	def_bool !$(as-instr,1:\n.inst 0\n.rept . - 1b\n\nnop\n.endr\n)
 
 config KASAN_SHADOW_OFFSET
 	hex
@@ -1341,14 +1341,6 @@ config COMPAT_VDSO
 	  You must have a 32-bit build of glibc 2.22 or later for programs
 	  to seamlessly take advantage of this.
 
-config THUMB2_COMPAT_VDSO
-	bool "Compile the 32-bit vDSO for Thumb-2 mode" if EXPERT
-	depends on COMPAT_VDSO
-	default y
-	help
-	  Compile the compat vDSO with '-mthumb -fomit-frame-pointer' if y,
-	  otherwise with '-marm'.
-
 menuconfig ARMV8_DEPRECATED
 	bool "Emulate deprecated/obsolete ARMv8 instructions"
 	depends on SYSCTL
@@ -1452,6 +1444,11 @@ config ARM64_PAN
 	 instruction if the cpu does not implement the feature.
 
 config ARM64_LSE_ATOMICS
+	bool
+	default ARM64_USE_LSE_ATOMICS
+	depends on $(as-instr,.arch_extension lse)
+
+config ARM64_USE_LSE_ATOMICS
 	bool "Atomic instructions"
 	depends on JUMP_LABEL
 	default y
@@ -1482,6 +1479,12 @@ config ARM64_VHE
 endmenu
 
 menu "ARMv8.2 architectural features"
+
+config AS_HAS_ARMV8_2
+       def_bool $(cc-option,-Wa$(comma)-march=armv8.2-a)
+
+config AS_HAS_SHA3
+       def_bool $(as-instr,.arch armv8.2-a+sha3)
 
 config ARM64_UAO
 	bool "Enable support for User Access Override (UAO)"

@@ -1,7 +1,6 @@
  /*
   * Goodix Touchscreen Driver
   * Copyright (C) 2020 - 2021 Goodix, Inc.
-  * Copyright (C) 2021 XiaoMi, Inc.
   *
   * This program is free software; you can redistribute it and/or modify
   * it under the terms of the GNU General Public License as published by
@@ -20,6 +19,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
+#include <linux/hwid.h>
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 #include <linux/input/mt.h>
@@ -34,6 +34,7 @@
 #define CORE_MODULE_PROB_SUCCESS		1
 #define CORE_MODULE_PROB_FAILED			-1
 #define CORE_MODULE_REMOVED				-2
+#define OLED_JUDGE_ID					(17+307)
 int core_module_prob_sate = CORE_MODULE_UNPROBED;
 struct goodix_module goodix_modules;
 struct goodix_ts_core *goodix_core_data;
@@ -1042,7 +1043,7 @@ static int goodix_get_panel_type(struct goodix_ts_core *ts_data)
 {
 	int i = 0, j;
 	u8 *lockdown = ts_data->lockdown_info;
-	__maybe_unused struct goodix_config_info *panel_list = ts_data->board_data.config_array;
+	struct goodix_config_info *panel_list = ts_data->board_data.config_array;
 
 	for (j = 0; j < 60; j++) {
 		if (lockdown[1] == 0x42) {
@@ -1097,8 +1098,21 @@ void goodix_match_fw(struct goodix_ts_core *ts_data)
 	if (is_lockdown_empty(ts_data->lockdown_info))
 		goodix_ts_get_lockdowninfo(ts_data);
 	if (goodix_get_panel_type(ts_data) < 0) {
-		ts->fw_name = TS_DEFAULT_FIRMWARE;
-		ts->cfg_bin_name = TS_DEFAULT_CFG_BIN;
+		switch (get_hw_version_platform()) {
+			case HARDWARE_PROJECT_K9:
+				ts->fw_name = TS_DEFAULT_FIRMWARE_K9;
+				ts->cfg_bin_name = TS_DEFAULT_CFG_BIN_K9;
+				break;
+			case HARDWARE_PROJECT_K9D:
+				ts->fw_name = TS_DEFAULT_FIRMWARE_K9D;
+				ts->cfg_bin_name = TS_DEFAULT_CFG_BIN_K9D;
+				break;
+			default:
+				ts->fw_name = TS_DEFAULT_FIRMWARE;
+				ts->cfg_bin_name = TS_DEFAULT_CFG_BIN;
+				break;
+		}
+
 	} else {
 		ts->fw_name = ts->config_array[ts->panel_index].gdx_fw_name;
 		ts->cfg_bin_name =ts->config_array[ts->panel_index].gdx_cfg_name;
@@ -1274,7 +1288,7 @@ static void goodix_ts_report_pen(struct input_dev *dev,
 static void goodix_ts_report_finger(struct input_dev *dev,
 		struct goodix_touch_data *touch_data)
 {
-	//struct goodix_ts_core *core_data = input_get_drvdata(dev);
+	struct goodix_ts_core *core_data = input_get_drvdata(dev);
 	unsigned int touch_num = touch_data->touch_num;
 	static u32 pre_fin;
 	int i;
@@ -1285,11 +1299,12 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 		if (touch_data->coords[i].status == TS_RELEASE) {
 			input_mt_slot(dev, i);
 			input_mt_report_slot_state(dev, MT_TOOL_FINGER, false);
-			/*
 			if (__test_and_clear_bit(i, &core_data->touch_id)) {
 				ts_info("finger report leave:%d", i);
 			}
-			*/
+#ifdef GOODIX_XIAOMI_TOUCHFEATURE
+			last_touch_events_collect(i, 0);
+#endif
 			continue;
 		}
 		/* ts_debug("report: id %d, x %d, y %d, w %d", i,
@@ -1301,11 +1316,12 @@ static void goodix_ts_report_finger(struct input_dev *dev,
 				touch_data->coords[i].x);
 		input_report_abs(dev, ABS_MT_POSITION_Y,
 				touch_data->coords[i].y);
-		/*
 		if (!__test_and_set_bit(i, &core_data->touch_id)) {
 			ts_info("finger report press:%d", i);
 		}
-		*/
+#ifdef GOODIX_XIAOMI_TOUCHFEATURE
+			last_touch_events_collect(i, 1);
+#endif
 	}
 
 	/*first touch down and last touch up condition*/
@@ -1390,10 +1406,6 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	}
 	mutex_unlock(&goodix_modules.mutex);
 
-	/* prevent CPU from entering deep sleep */
-	pm_qos_update_request(&core_data->pm_qos_touch_req, 100);
-	pm_qos_update_request(&core_data->pm_qos_spi_req, 100);
-
 	/* read touch data from touch device */
 	ret = hw_ops->event_handler(core_data, ts_event);
 	if (!core_data->tools_ctrl_sync)
@@ -1414,9 +1426,6 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 		}
 	}
 
-	pm_qos_update_request(&core_data->pm_qos_spi_req, PM_QOS_DEFAULT_VALUE);
-	pm_qos_update_request(&core_data->pm_qos_touch_req, PM_QOS_DEFAULT_VALUE);
-
 	return IRQ_HANDLED;
 }
 
@@ -1436,16 +1445,6 @@ static int goodix_ts_irq_setup(struct goodix_ts_core *core_data)
 		ts_err("failed get irq num %d", core_data->irq);
 		return -EINVAL;
 	}
-
-	core_data->pm_qos_spi_req.type = PM_QOS_REQ_AFFINE_IRQ;
-	core_data->pm_qos_spi_req.irq = core_data->bus->irq;
-	pm_qos_add_request(&core_data->pm_qos_spi_req, PM_QOS_CPU_DMA_LATENCY,
-			PM_QOS_DEFAULT_VALUE);
-
-	core_data->pm_qos_touch_req.type = PM_QOS_REQ_AFFINE_IRQ;
-	core_data->pm_qos_touch_req.irq = core_data->irq;
-	pm_qos_add_request(&core_data->pm_qos_touch_req, PM_QOS_CPU_DMA_LATENCY,
-			PM_QOS_DEFAULT_VALUE);
 
 	ts_info("IRQ:%u,flags:%d", core_data->irq, (int)ts_bdata->irq_flags);
 	ret = devm_request_threaded_irq(&core_data->pdev->dev,
@@ -1853,6 +1852,9 @@ static void goodix_ts_release_connects(struct goodix_ts_core *core_data)
 			input_mt_report_slot_state(input_dev,
 					MT_TOOL_FINGER,
 					false);
+#ifdef FTS_XIAOMI_TOUCHFEATURE
+			last_touch_events_collect(i, 0);
+#endif
 		}
 		input_report_key(input_dev, BTN_TOUCH, 0);
 #ifdef CONFIG_TOUCHSCREEN_QGKI_GOODIX
@@ -2773,7 +2775,7 @@ static ssize_t goodix_fw_version_info_read(struct file *file, char __user *buf,
 	if (hw_ops->read_version) {
 		ret = hw_ops->read_version(goodix_core_data, &chip_ver);
 		if (!ret) {
-			cnt = snprintf(&k_buf[0], sizeof(&k_buf[0]),
+			cnt = snprintf(&k_buf[0], PAGE_SIZE,
 				"patch_pid:%s\n",
 				chip_ver.patch_pid);
 			cnt += snprintf(&k_buf[cnt], PAGE_SIZE,
@@ -3160,9 +3162,6 @@ static int goodix_ts_remove(struct platform_device *pdev)
 #endif
 	}
 
-	pm_qos_remove_request(&core_data->pm_qos_touch_req);
-	pm_qos_remove_request(&core_data->pm_qos_spi_req);
-
 	return 0;
 }
 
@@ -3195,6 +3194,16 @@ static struct platform_driver goodix_ts_driver = {
 static int __init goodix_ts_core_init(void)
 {
 	int ret;
+
+	if (get_hw_version_platform() == HARDWARE_PROJECT_K9) {
+		gpio_direction_input(OLED_JUDGE_ID);
+		if (gpio_get_value(OLED_JUDGE_ID)) {
+			ts_err("TP is goodix");
+		} else {
+			ts_err("TP is focal");
+			return 0;
+		}
+	}
 
 	ts_info("Core layer init:%s", GOODIX_DRIVER_VERSION);
 	ret = goodix_bus_init();

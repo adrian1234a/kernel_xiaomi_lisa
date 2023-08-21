@@ -1122,7 +1122,6 @@ struct rq {
 	call_single_data_t	hrtick_csd;
 #endif
 	struct hrtimer		hrtick_timer;
-	ktime_t 		hrtick_time;
 #endif
 
 #ifdef CONFIG_SCHEDSTATS
@@ -1613,12 +1612,15 @@ static inline void unregister_sched_domain_sysctl(void)
 }
 #endif
 
-extern void flush_smp_call_function_from_idle(void);
+extern int newidle_balance(struct rq *this_rq, struct rq_flags *rf);
 
-#else /* !CONFIG_SMP: */
-static inline void flush_smp_call_function_from_idle(void) { }
+#else
+
 static inline void sched_ttwu_pending(void) { }
-#endif
+
+static inline int newidle_balance(struct rq *this_rq, struct rq_flags *rf) { return 0; }
+
+#endif /* CONFIG_SMP */
 
 #include "stats.h"
 #include "autogroup.h"
@@ -2733,14 +2735,6 @@ static inline bool uclamp_is_used(void)
 {
 	return static_branch_likely(&sched_uclamp_used);
 }
-static inline bool uclamp_is_ignore_uclamp_max(struct task_struct *p)
-{
-	return p->uclamp_req[UCLAMP_MAX].ignore_uclamp_max;
-}
-inline void uclamp_rq_inc_id(struct rq *rq, struct task_struct *p,
-			     enum uclamp_id clamp_id);
-inline void uclamp_rq_dec_id(struct rq *rq, struct task_struct *p,
-			     enum uclamp_id clamp_id);
 #else /* CONFIG_UCLAMP_TASK */
 static inline
 unsigned long uclamp_rq_util_with(struct rq *rq, unsigned long util,
@@ -2757,12 +2751,6 @@ static inline bool uclamp_is_used(void)
 {
 	return false;
 }
-static inline bool uclamp_is_ignore_uclamp_max(struct task_struct *p)
-{
-	return false;
-}
-static inline void uclamp_rq_inc_id(struct rq *rq, struct task_struct *p,
-				    enum uclamp_id clamp_id) {}
 #endif /* CONFIG_UCLAMP_TASK */
 
 #ifdef CONFIG_UCLAMP_TASK_GROUP

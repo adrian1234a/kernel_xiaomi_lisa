@@ -35,7 +35,7 @@ config GCC_VERSION
 	default 0
 
 config CC_IS_CLANG
-	def_bool $(success,$(CC) --version | grep -q clang)
+	def_bool $(success,$(CC) --version | head -n 1 | grep -q clang)
 
 config LD_IS_LLD
 	def_bool $(success,$(LD) -v | head -n 1 | grep -q LLD)
@@ -84,6 +84,10 @@ config THREAD_INFO_IN_TASK
 
 	  One subtle change that will be needed is to use try_get_task_stack()
 	  and put_task_stack() in save_thread_stack_tsk() and get_wchan().
+
+config GCC_GRAPHITE
+	bool "Enable GCC Polyhedral Loop Optimization (Graphite)"
+	depends on CC_IS_GCC
 
 menu "General setup"
 
@@ -1343,6 +1347,8 @@ config BPF
 
 menuconfig EXPERT
 	bool "Configure standard kernel features (expert users)"
+	# Unhide debug options, to make the on-by-default options visible
+	select DEBUG_KERNEL
 	help
 	  This option allows certain base kernel options and settings
           to be disabled or tweaked. This is for specialized
