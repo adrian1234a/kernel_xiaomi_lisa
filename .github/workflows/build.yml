@@ -17,11 +17,11 @@ jobs:
         sudo apt install libc6-dev clang flex bison libssl-dev bc python3 python2 zip unzip git lld llvm
         mkdir -p $GITHUB_WORKSPACE/kernel_workspace
         
-    - name: Download Proton-clang
+    - name: Download Clang 17.0.2
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone https://github.com/kdrag0n/proton-clang.git proton-clang --depth=1
-        export PATH="$GITHUB_WORKSPACE/kernel_workspace/proton-clang/bin:$PATH"
+        git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86.git clang --depth=1
+        export PATH="$GITHUB_WORKSPACE/kernel_workspace/clang/clang-r487747c/bin:$PATH"
         
     - name: Download kernel source
       run: |
