@@ -4,7 +4,7 @@
 # Copyright (C) 2020-2021 Adithya R.
 
 SECONDS=0 # builtin bash timer
-TC_DIR="$HOME/tc/clang-r450784d"
+TC_DIR="$GITHUB_WORKSPACE/kernel_workspace/clang/clang-r487747c"
 AK3_DIR="$HOME/AnyKernel3"
 DEFCONFIG="lisa_defconfig"
 
@@ -52,7 +52,7 @@ echo -e "\nKernel compiled succesfully! Zipping up...\n"
 if [ -d "$AK3_DIR" ]; then
 	cp -r $AK3_DIR AnyKernel3
 	git -C AnyKernel3 checkout lisa &> /dev/null
-elif ! git clone -q https://github.com/ghostrider-reborn/AnyKernel3 -b lisa; then
+elif ! git clone -q https://github.com/adrian1234a/AnyKernel3 -b lisa; then
 	echo -e "\nAnyKernel3 repo not found locally and couldn't clone from GitHub! Aborting..."
 	exit 1
 fi
